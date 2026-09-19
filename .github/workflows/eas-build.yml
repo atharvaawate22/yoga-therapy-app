@@ -1,0 +1,62 @@
+name: EAS Build (Android APK)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build Android preview APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN secret is not set. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android APK on EAS
+        run: eas build --platform android --profile preview --non-interactive --wait
+
+      - name: Fetch APK download URL
+        id: apk
+        run: |
+          URL=$(eas build:list --platform android --limit 1 --non-interactive --json --status finished | node -e "
+            const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const url = data?.[0]?.artifacts?.buildUrl;
+            if (!url) { console.error('No build URL found'); process.exit(1); }
+            console.log(url);
+          ")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "### 📱 APK ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download the APK]($URL)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download APK for this workflow run
+        run: curl -L -o app-preview.apk "${{ steps.apk.outputs.url }}"
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yoga-therapy-app-preview-apk
+          path: app-preview.apk
+          retention-days: 30

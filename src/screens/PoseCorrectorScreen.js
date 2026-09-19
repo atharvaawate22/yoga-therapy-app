@@ -10,6 +10,7 @@ import * as Speech from 'expo-speech';
 import { colors, typography, spacing, borderRadius, screenStyles, shadows } from '../theme/theme';
 import { POSE_API_BASE_URL, POSE_API_ENDPOINTS, POSE_API_TIMEOUT_MS } from '../config/poseApi';
 import { getUserProfile } from '../data/userStorage';
+import { getNextDemoResult } from '../data/demoPoseData';
 import ExperienceBadge from '../components/ExperienceBadge';
 
 const defaultResult = {
@@ -71,6 +72,7 @@ const PoseCorrectorScreen = ({ route }) => {
   const [liveError, setLiveError] = useState(null);
   const [experienceLevel, setExperienceLevel] = useState('beginner');
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const sessionId = useMemo(() => `session-${Date.now()}-${Math.floor(Math.random() * 1000000)}`, []);
   const apiUrl = useMemo(() => `${POSE_API_BASE_URL}${POSE_API_ENDPOINTS.analyze}`, []);
@@ -139,6 +141,7 @@ const PoseCorrectorScreen = ({ route }) => {
         corrections: payload.corrections?.length ? payload.corrections : ['No clear pose detected'],
         distances: payload.distances ?? {},
       };
+      setIsDemoMode(false);
       setResult(newResult);
       setLastUpdated(new Date());
       // Speak correction if live mode
@@ -146,13 +149,21 @@ const PoseCorrectorScreen = ({ route }) => {
         speakCorrection(newResult.corrections, newResult.pose);
       }
     } catch (error) {
-      const message = error?.name === 'AbortError'
-        ? 'Request timed out. Check backend server and network.'
-        : error?.message === 'Network request failed'
-          ? `Cannot reach API at ${apiUrl}. Start backend and ensure phone + laptop are on same Wi-Fi.`
-          : error?.message || 'Failed to analyze pose.';
-      if (showAlerts) Alert.alert('Pose Analysis Error', message);
-      else setLiveError(message);
+      const isUnreachable = error?.name === 'AbortError' || error?.message === 'Network request failed';
+      if (isUnreachable) {
+        // Backend isn't running/reachable — fall back to a simulated result
+        // so the corrector still demonstrates the feature end-to-end.
+        const demoResult = getNextDemoResult();
+        setIsDemoMode(true);
+        setResult(demoResult);
+        setLastUpdated(new Date());
+        setLiveError(null);
+        if (source === 'live') speakCorrection(demoResult.corrections, demoResult.pose);
+      } else {
+        const message = error?.message || 'Failed to analyze pose.';
+        if (showAlerts) Alert.alert('Pose Analysis Error', message);
+        else setLiveError(message);
+      }
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
       setIsAnalyzing(false);
@@ -172,9 +183,18 @@ const PoseCorrectorScreen = ({ route }) => {
       setSelectedImageUri(null);
       await analyzeBase64Image(photo.base64, source, true, showAlerts);
     } catch (error) {
+      if (!showAlerts) {
+        // Live mode: camera not ready/available yet — show a simulated
+        // result rather than a raw error, same as an unreachable backend.
+        const demoResult = getNextDemoResult();
+        setIsDemoMode(true);
+        setResult(demoResult);
+        setLastUpdated(new Date());
+        speakCorrection(demoResult.corrections, demoResult.pose);
+        return;
+      }
       const message = error?.message || 'Failed to analyze pose.';
-      if (showAlerts) Alert.alert('Pose Analysis Error', message);
-      else setLiveError(message);
+      Alert.alert('Pose Analysis Error', message);
     }
   };
 
@@ -346,13 +366,15 @@ const PoseCorrectorScreen = ({ route }) => {
           {feedbackMode === 'image' && selectedImageUri ? (
             <Image source={{ uri: selectedImageUri }} style={styles.camera} resizeMode="cover" />
           ) : (
-            <CameraView
-              ref={cameraRef}
-              style={styles.camera}
-              facing={cameraFacing}
-              animateShutter={false}
-              onCameraReady={() => setIsCameraReady(true)}
-            />
+            <View style={styles.camera}>
+              <CameraView
+                ref={cameraRef}
+                style={StyleSheet.absoluteFillObject}
+                facing={cameraFacing}
+                animateShutter={false}
+                onCameraReady={() => setIsCameraReady(true)}
+              />
+            </View>
           )}
 
           {/* Live overlay */}
@@ -435,8 +457,18 @@ const PoseCorrectorScreen = ({ route }) => {
         <View style={styles.resultCard}>
           <View style={styles.resultHeader}>
             <Text style={styles.sectionTitle}>Latest Result</Text>
-            <ExperienceBadge level={experienceLevel} small />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {isDemoMode && (
+                <View style={styles.demoBadge}>
+                  <Text style={styles.demoBadgeText}>DEMO</Text>
+                </View>
+              )}
+              <ExperienceBadge level={experienceLevel} small />
+            </View>
           </View>
+          {isDemoMode && (
+            <Text style={styles.demoNoticeText}>⚠ Backend not detected — showing simulated demo analysis.</Text>
+          )}
           <Text style={styles.resultPose}>{poseDisplayName}</Text>
           <Text style={styles.resultText}>Confidence: {(Number(result.confidence) * 100).toFixed(0)}%</Text>
           <Text style={styles.lastUpdatedText}>
@@ -559,6 +591,12 @@ const styles = StyleSheet.create({
     padding: spacing.md, marginTop: spacing.md, ...shadows.card,
   },
   resultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  demoBadge: {
+    backgroundColor: '#FFF3CD', borderWidth: 1, borderColor: '#FFE29A',
+    borderRadius: borderRadius.sm ?? 6, paddingHorizontal: 8, paddingVertical: 2,
+  },
+  demoBadgeText: { fontSize: 10, fontWeight: '800', color: '#946200', letterSpacing: 0.5 },
+  demoNoticeText: { ...typography.caption, color: '#946200', marginBottom: spacing.xs },
   sectionTitle: { ...typography.headerSmall, color: colors.primary },
   resultPose: { ...typography.headerSmall, color: colors.text, fontWeight: '800', marginBottom: 2 },
   resultText: { ...typography.bodySmall, color: colors.textLight },
