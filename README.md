@@ -106,6 +106,21 @@ This uses the `preview` profile in `eas.json`, which builds a downloadable
 `.apk` file (not an `.aab`, so no Play Store needed) — EAS prints a link to
 the finished APK when the build completes (a few minutes).
 
+#### Automated builds via GitHub Actions
+
+`.github/workflows/eas-build.yml` builds a fresh APK automatically on every
+push to `main`, and can also be run on demand. One-time setup:
+
+1. Create a free account at [expo.dev](https://expo.dev) if you don't have one.
+2. Generate an access token: [expo.dev/accounts/\[account\]/settings/access-tokens](https://expo.dev/accounts/%5Baccount%5D/settings/access-tokens) → **Create token**.
+3. In this GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**, name it `EXPO_TOKEN`, and paste the token.
+
+After that, every push to `main` (or a manual run from the **Actions** tab →
+**EAS Build (Android APK)** → **Run workflow**) builds the APK in Expo's
+cloud and attaches it to the workflow run as a downloadable artifact
+(`yoga-therapy-app-preview-apk`) — no local setup needed to get a fresh
+installable APK.
+
 The Live Pose Corrector works without the Python backend running: if it
 can't reach the backend, it automatically falls back to a simulated
 "DEMO" result so the feature is still demonstrable end-to-end.
