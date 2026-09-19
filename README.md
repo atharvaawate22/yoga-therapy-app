@@ -90,6 +90,26 @@ For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_W
    - Press `i` for iOS simulator
    - Press `w` for web browser
 
+### Building a Real Installable App (no Expo Go needed)
+
+To get a standalone APK a recruiter/tester can install directly on an
+Android phone, use [EAS Build](https://docs.expo.dev/build/introduction/)
+(free tier, runs in Expo's cloud):
+
+```bash
+npm install -g eas-cli
+eas login              # free Expo account
+eas build --platform android --profile preview
+```
+
+This uses the `preview` profile in `eas.json`, which builds a downloadable
+`.apk` file (not an `.aab`, so no Play Store needed) — EAS prints a link to
+the finished APK when the build completes (a few minutes).
+
+The Live Pose Corrector works without the Python backend running: if it
+can't reach the backend, it automatically falls back to a simulated
+"DEMO" result so the feature is still demonstrable end-to-end.
+
 ### Running the Pose-Analysis Backend
 
 The live pose corrector requires the Python backend to be running on a machine
