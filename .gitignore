@@ -19,6 +19,7 @@ CLAUDE.md
 .expo/
 dist/
 web-build/
+deploy_web/
 
 # Native builds
 *.orig.*
