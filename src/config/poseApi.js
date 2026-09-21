@@ -3,19 +3,16 @@
  *
  * Resolution order:
  *  1. In a built APK (no Expo dev host), use HOSTED_API_URL if it is set —
- *     this is your deployed backend (e.g. a Hugging Face Space). See
- *     backend/README.md for how to deploy and get this URL.
+ *     this is the deployed backend. See backend/README.md for redeploying it.
  *  2. In Expo dev, auto-detect the dev machine's LAN IP and use port 8000.
  *  3. Otherwise fall back to the hardcoded LAN IP below.
  */
 
 import Constants from 'expo-constants';
 
-// Set this to your deployed backend base URL to make the installed APK work
-// without a laptop on the same Wi-Fi, e.g.
-//   'https://your-user-yoga-pose-engine.hf.space'
-// Leave '' to always use dev auto-detection / the LAN fallback.
-const HOSTED_API_URL = '';
+// Deployed backend (Render, Docker web service under backend/). Free tier
+// spins down after inactivity — first request after idle can take ~50s.
+const HOSTED_API_URL = 'https://yoga-pose-engine.onrender.com';
 
 const expoHostUri = Constants.expoConfig?.hostUri || '';
 const detectedHost = expoHostUri.split(':')[0] || '';
