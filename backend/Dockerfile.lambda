@@ -1,0 +1,24 @@
+# Lambda container image for the pose-analysis API. Separate from the plain
+# Dockerfile (Render/generic Docker hosts, listens on $PORT via uvicorn) --
+# this one adds the Lambda Runtime Interface Client to a plain Python base
+# image (the documented alternative to AWS's own base image) and invokes the
+# FastAPI app through Mangum (lambda_handler.py) instead of uvicorn directly.
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libglib2.0-0 \
+        libgomp1 \
+        libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /var/task
+
+COPY requirements-space.txt .
+RUN pip install --no-cache-dir -r requirements-space.txt mangum==0.19.0 awslambdaric==3.1.1
+
+COPY yoga_pose_engine.py lambda_handler.py ./
+COPY utils/ ./utils/
+COPY models/ ./models/
+
+ENTRYPOINT ["python", "-m", "awslambdaric"]
+CMD ["lambda_handler.handler"]

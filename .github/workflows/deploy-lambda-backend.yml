@@ -1,0 +1,93 @@
+name: Deploy Backend (AWS Lambda)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-lambda-backend.yml"
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: yoga-pose-engine
+  LAMBDA_FUNCTION_NAME: yoga-pose-engine
+  LAMBDA_ROLE_ARN: arn:aws:iam::968138090176:role/yoga-pose-engine-lambda-role
+
+jobs:
+  deploy:
+    name: Build, push, and deploy Lambda container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for AWS credentials
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "::error::AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY secrets are not set. Add them under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+          docker build -f backend/Dockerfile.lambda -t "$IMAGE_URI" backend
+          docker push "$IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update Lambda function
+        run: |
+          if aws lambda get-function --function-name "$LAMBDA_FUNCTION_NAME" >/dev/null 2>&1; then
+            echo "Updating existing function..."
+            aws lambda update-function-code \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              --image-uri "${{ steps.build.outputs.image_uri }}" \
+              --no-cli-pager
+            aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
+          else
+            echo "Creating new function..."
+            aws lambda create-function \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              --package-type Image \
+              --code ImageUri="${{ steps.build.outputs.image_uri }}" \
+              --role "$LAMBDA_ROLE_ARN" \
+              --timeout 30 \
+              --memory-size 2048 \
+              --no-cli-pager
+            aws lambda wait function-active --function-name "$LAMBDA_FUNCTION_NAME"
+          fi
+
+      - name: Ensure public Function URL exists
+        run: |
+          if ! aws lambda get-function-url-config --function-name "$LAMBDA_FUNCTION_NAME" >/dev/null 2>&1; then
+            aws lambda create-function-url-config \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              --auth-type NONE \
+              --no-cli-pager
+            aws lambda add-permission \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              --statement-id FunctionURLAllowPublicAccess \
+              --action lambda:InvokeFunctionUrl \
+              --principal "*" \
+              --function-url-auth-type NONE \
+              --no-cli-pager
+          fi
+          URL=$(aws lambda get-function-url-config --function-name "$LAMBDA_FUNCTION_NAME" --query 'FunctionUrl' --output text)
+          echo "Function URL: $URL"
+          echo "### Lambda backend deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "URL: $URL" >> "$GITHUB_STEP_SUMMARY"
