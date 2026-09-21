@@ -3,6 +3,13 @@ export default ({ config }) => ({
   name: 'Yoga Therapy',
   slug: 'main',
   version: '1.0.0',
+  owner: 'atharvaawates-team',
+  extra: {
+    ...config.extra,
+    eas: {
+      projectId: '4d93d50c-4e33-4b46-88a8-7696c40e30d5',
+    },
+  },
   orientation: 'portrait',
   userInterfaceStyle: 'light',
   icon: './assets/icon.png',
