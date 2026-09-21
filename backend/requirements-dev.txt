@@ -1,0 +1,18 @@
+# Test-only dependency set.
+#
+# Deliberately EXCLUDES TensorFlow: the suite injects stubs for both model
+# runtimes, so the whole thing runs in under a second without a ~600 MB
+# install. Use requirements.txt when you need to train, evaluate, or serve.
+#
+#   python -m venv .venv-test
+#   .venv-test/Scripts/pip install -r requirements-dev.txt   # Windows
+#   pytest
+#
+# Last verified with: fastapi 0.141.1, numpy 2.4.6,
+# opencv-python-headless 4.13, pytest 9.1.1, httpx 0.28.1.
+fastapi>=0.135
+pydantic>=2.12
+numpy>=2,<3
+opencv-python-headless>=4.13
+pytest>=8.4
+httpx>=0.28          # required by fastapi.testclient

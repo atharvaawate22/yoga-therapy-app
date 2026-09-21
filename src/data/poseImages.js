@@ -11,6 +11,9 @@ const localImages = {
   butterfly_pose:    require('../../assets/poses/butterfly_pose.png'),
   childs_pose:       require('../../assets/poses/childs_pose.png'),
   cat_cow:           require('../../assets/poses/cat_cow.png'),
+  cobra_pose:        require('../../assets/poses/cobra_pose.png'),
+  tree_pose:         require('../../assets/poses/tree_pose.png'),
+  warrior_pose:      require('../../assets/poses/warrior_pose.png'),
 };
 
 /**
@@ -58,13 +61,8 @@ const remoteImages = {
   forward_bend:
     'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop&crop=top',
 
-  // Virabhadrasana II — Warrior II
-  warrior_pose:
-    'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?w=600&h=400&fit=crop&crop=center',
-
-  // Vrksasana — Tree Pose
-  tree_pose:
-    'https://images.unsplash.com/photo-1545389336-cf090694435e?w=600&h=400&fit=crop&crop=center',
+  // Note: warrior_pose (Virabhadrasana II), tree_pose (Vrksasana) and
+  // cobra_pose (Bhujangasana) are now served from local images above.
 };
 
 // Fallback image

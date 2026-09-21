@@ -1,8 +1,6 @@
 [
-  "adho_mukha_svanasana",
   "ashtanga_namaskara",
   "ashwa_sanchalanasana",
-  "bhujangasana",
   "boat_pose",
   "bridge_pose",
   "butterfly_pose",
@@ -12,6 +10,7 @@
   "cobra_pose",
   "dandasana",
   "downward_dog",
+  "forward_bend",
   "garland_pose",
   "hasta_padasana",
   "hasta_uttanasana",
@@ -23,10 +22,7 @@
   "shoulder_stand",
   "tadasana",
   "tree_pose",
-  "triangle",
   "triangle_pose",
-  "unknown",
   "upward_dog",
-  "uttanasana",
   "warrior_pose"
 ]

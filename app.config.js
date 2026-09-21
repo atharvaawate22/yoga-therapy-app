@@ -1,3 +1,6 @@
+// Single source of Expo configuration for the app.
+// (Replaces the former app.json, whose values were all overridden here.)
+// A function rather than an object so `config.extra` below is defined.
 export default ({ config }) => ({
   ...config,
   name: 'Yoga Therapy',
@@ -19,6 +22,11 @@ export default ({ config }) => ({
     backgroundColor: '#F1F8E9',
   },
   assetBundlePatterns: ['**/*'],
+  // Disabled: the New Architecture's CMake/ninja codegen hits Windows' 260-char
+  // path limit for native modules (react-native-safe-area-context, gesture-handler)
+  // when built from a deeply nested project path. Re-enable once building from CI
+  // or a short path, or once long-path support is confirmed on the build machine.
+  newArchEnabled: false,
   ios: {
     supportsTablet: true,
     infoPlist: {

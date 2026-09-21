@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: yoga-pose-engine
+  labels:
+    app.kubernetes.io/name: yoga-pose-engine
+spec:
+  # LoadBalancer is what a cloud deployment would use, and Minikube emulates it
+  # via `minikube tunnel` (or `minikube service yoga-pose-engine --url`).
+  # Switch to ClusterIP if the API should only be reachable from inside the
+  # cluster behind an Ingress.
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: yoga-pose-engine
+  ports:
+    - name: http
+      port: 80
+      targetPort: http # the container's 7860
+      protocol: TCP

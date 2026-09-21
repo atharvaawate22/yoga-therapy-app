@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const PROFILE_KEY = '@yoga_user_profile';
 const CUSTOM_SETS_KEY = '@yoga_custom_sets';
 const ONBOARDED_KEY = '@yoga_onboarded';
+const FAVORITES_KEY = '@yoga_favorite_poses';
+const VOICE_KEY = '@yoga_voice_enabled';
 
 // Default profile
 const defaultProfile = {
@@ -77,4 +79,33 @@ export const updateCustomSet = async (id, updates) => {
     sets[idx] = { ...sets[idx], ...updates };
     await AsyncStorage.setItem(CUSTOM_SETS_KEY, JSON.stringify(sets));
   }
+};
+
+/** Get favorite pose ids */
+export const getFavoriteIds = async () => {
+  try {
+    const json = await AsyncStorage.getItem(FAVORITES_KEY);
+    return json ? JSON.parse(json) : [];
+  } catch { return []; }
+};
+
+/** Toggle a pose id in favorites; returns the new favorite state */
+export const toggleFavorite = async (poseId) => {
+  const ids = await getFavoriteIds();
+  const isFav = ids.includes(poseId);
+  const next = isFav ? ids.filter(id => id !== poseId) : [...ids, poseId];
+  await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+  return !isFav;
+};
+
+/** Global voice guidance preference (default: on) */
+export const getVoiceEnabled = async () => {
+  try {
+    const val = await AsyncStorage.getItem(VOICE_KEY);
+    return val === null ? true : val === 'true';
+  } catch { return true; }
+};
+
+export const setVoiceEnabled = async (enabled) => {
+  await AsyncStorage.setItem(VOICE_KEY, String(enabled));
 };

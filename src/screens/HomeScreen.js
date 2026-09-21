@@ -2,22 +2,31 @@
  * HomeScreen - Main screen with prominent Live Pose Corrector + all features
  */
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
-import yogaData from '../data/yogaData';
-import { getUserProfile } from '../data/userStorage';
+import yogaData, { getAllPoses } from '../data/yogaData';
+import { getUserProfile, getFavoriteIds } from '../data/userStorage';
+import { getPracticeStats } from '../data/sessionStorage';
+import { resolveImageSource } from '../utils/imageUtils';
 import ProblemCard from '../components/ProblemCard';
 import ExperienceBadge from '../components/ExperienceBadge';
 
 const HomeScreen = ({ navigation }) => {
   const [profile, setProfile] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [favorites, setFavorites] = useState([]);
   const problems = Object.keys(yogaData);
 
   useFocusEffect(
     useCallback(() => {
       getUserProfile().then(setProfile);
+      getPracticeStats().then(setStats);
+      getFavoriteIds().then(ids => {
+        const all = getAllPoses();
+        setFavorites(ids.map(id => all.find(p => p.id === id)).filter(Boolean));
+      });
     }, [])
   );
 
@@ -54,6 +63,17 @@ const HomeScreen = ({ navigation }) => {
           {profile && (
             <View style={styles.headerBadge}>
               <ExperienceBadge level={profile.experience} />
+              {stats?.currentStreakDays > 0 && (
+                <TouchableOpacity
+                  style={styles.streakChip}
+                  onPress={() => navigation.navigate('History')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.streakChipText}>
+                    🔥 {stats.currentStreakDays} day streak
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -124,7 +144,48 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.actionTitle}>Health Scanner</Text>
             <Text style={styles.actionDesc}>Find by problem</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('History')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#FFB74D18' }]}>
+              <Text style={styles.actionEmoji}>📊</Text>
+            </View>
+            <Text style={styles.actionTitle}>My Progress</Text>
+            <Text style={styles.actionDesc}>
+              {stats?.totalSessions ? `${stats.totalSessions} sessions` : 'History & streaks'}
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* ── Your Favorites ── */}
+        {favorites.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Your Favorites ❤️</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.favoritesRow}
+            >
+              {favorites.map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.favCard}
+                  onPress={() => navigation.navigate('PoseDetail', { pose: p })}
+                  activeOpacity={0.85}
+                >
+                  <Image source={resolveImageSource(p.image)} style={styles.favImage} />
+                  <Text style={styles.favName} numberOfLines={1}>{p.name}</Text>
+                  <Text style={styles.favDuration}>{p.duration}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* ── Choose by Condition ── */}
         <View style={styles.divider}>
@@ -179,7 +240,23 @@ const styles = StyleSheet.create({
     ...shadows.card, borderWidth: 1, borderColor: colors.borderLight,
   },
   profileBtnText: { fontSize: 20 },
-  headerBadge: { marginTop: spacing.sm },
+  headerBadge: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  streakChip: {
+    backgroundColor: colors.intermediateBg,
+    borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  streakChipText: {
+    ...typography.caption,
+    color: colors.warning,
+    fontWeight: '700',
+  },
 
   /* Live Pose Corrector Banner */
   poseCoachBanner: {
@@ -256,12 +333,14 @@ const styles = StyleSheet.create({
   /* Quick Actions */
   actionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
   actionCard: {
-    flex: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
@@ -276,6 +355,31 @@ const styles = StyleSheet.create({
   actionEmoji: { fontSize: 20 },
   actionTitle: { ...typography.caption, fontWeight: '700', color: colors.text },
   actionDesc: { ...typography.caption, color: colors.textMuted, marginTop: 1, fontSize: 10 },
+
+  /* Favorites */
+  favoritesRow: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  favCard: {
+    width: 120,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
+    ...shadows.card,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  favImage: {
+    width: '100%',
+    height: 76,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.backgroundDark,
+    marginBottom: spacing.sm,
+  },
+  favName: { ...typography.caption, fontWeight: '700', color: colors.text },
+  favDuration: { ...typography.caption, color: colors.textMuted, fontSize: 10, marginTop: 1 },
 
   /* Divider */
   divider: {

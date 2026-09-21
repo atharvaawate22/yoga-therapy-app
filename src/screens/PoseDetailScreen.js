@@ -1,16 +1,27 @@
 /**
  * PoseDetailScreen - Full pose assistance with image + step-by-step instructions
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import ExperienceBadge from '../components/ExperienceBadge';
 import { resolveImageSource } from '../utils/imageUtils';
+import { getFavoriteIds, toggleFavorite } from '../data/userStorage';
 
 const PoseDetailScreen = ({ route, navigation }) => {
   const { pose } = route.params;
-  const { name, sanskritName, description, duration, difficulty, image, benefits, precautions, steps } = pose;
+  const { id, name, sanskritName, description, duration, difficulty, image, benefits, precautions, steps } = pose;
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  useEffect(() => {
+    getFavoriteIds().then(ids => setIsFavorite(ids.includes(id)));
+  }, [id]);
+
+  const handleToggleFavorite = async () => {
+    const next = await toggleFavorite(id);
+    setIsFavorite(next);
+  };
 
   const imgSource = resolveImageSource(image);
 
@@ -21,6 +32,14 @@ const PoseDetailScreen = ({ route, navigation }) => {
         <View style={styles.heroContainer}>
           <Image source={imgSource} style={styles.heroImage} resizeMode="cover" />
           <View style={styles.heroOverlay} />
+          <TouchableOpacity
+            style={styles.favoriteBtn}
+            onPress={handleToggleFavorite}
+            activeOpacity={0.8}
+            accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Text style={styles.favoriteBtnText}>{isFavorite ? '❤️' : '🤍'}</Text>
+          </TouchableOpacity>
           <View style={styles.heroContent}>
             <ExperienceBadge level={difficulty || 'beginner'} />
             <Text style={styles.heroTitle}>{name}</Text>
@@ -91,6 +110,24 @@ const PoseDetailScreen = ({ route, navigation }) => {
             </View>
           )}
 
+          {/* Practice With Timer Button */}
+          <TouchableOpacity
+            style={styles.timerBtn}
+            onPress={() => navigation.navigate('PracticeSession', {
+              title: name,
+              poses: [pose],
+              sourceType: 'single',
+            })}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.correctorBtnEmoji}>⏱️</Text>
+            <View style={styles.correctorBtnContent}>
+              <Text style={styles.timerBtnTitle}>Practice With Timer</Text>
+              <Text style={styles.timerBtnDesc}>Guided hold for {duration} with voice cues</Text>
+            </View>
+            <Text style={styles.timerBtnArrow}>→</Text>
+          </TouchableOpacity>
+
           {/* Try Pose Corrector Button */}
           <TouchableOpacity
             style={styles.correctorBtn}
@@ -124,6 +161,19 @@ const styles = StyleSheet.create({
     left: spacing.lg,
     right: spacing.lg,
   },
+  favoriteBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.card,
+  },
+  favoriteBtnText: { fontSize: 20 },
   heroTitle: {
     ...typography.headerLarge,
     color: colors.textWhite,
@@ -202,10 +252,22 @@ const styles = StyleSheet.create({
   bulletRow: { flexDirection: 'row', marginBottom: 6 },
   bulletDot: { fontSize: 16, color: colors.primary, marginRight: spacing.sm, lineHeight: 22 },
   bulletText: { ...typography.body, color: colors.textSecondary, flex: 1, lineHeight: 22 },
-  correctorBtn: {
+  timerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    ...shadows.prominent,
+  },
+  timerBtnTitle: { ...typography.headerSmall, color: colors.textWhite, fontSize: 15 },
+  timerBtnDesc: { ...typography.caption, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+  timerBtnArrow: { fontSize: 20, color: colors.textWhite, fontWeight: '700' },
+  correctorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accent,
     borderRadius: borderRadius.xl,
     padding: spacing.md,
     marginTop: spacing.sm,

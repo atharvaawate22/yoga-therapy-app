@@ -2,7 +2,7 @@
  * PoseScreen - Shows recommended poses for a condition
  */
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, screenStyles, borderRadius, shadows } from '../theme/theme';
 import PoseCard from '../components/PoseCard';
@@ -30,6 +30,26 @@ const PoseScreen = ({ route, navigation }) => {
             {poses.length} {poses.length === 1 ? 'pose' : 'poses'} tailored for {problemName}
           </Text>
         </View>
+
+        {/* Start Timed Practice */}
+        <TouchableOpacity
+          style={styles.startPracticeBtn}
+          onPress={() => navigation.navigate('PracticeSession', {
+            title: problemName,
+            poses,
+            sourceType: 'routine',
+          })}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.startPracticeEmoji}>▶️</Text>
+          <View style={styles.startPracticeContent}>
+            <Text style={styles.startPracticeTitle}>Start Guided Practice</Text>
+            <Text style={styles.startPracticeDesc}>
+              Timed play-through of all {poses.length} poses with voice cues
+            </Text>
+          </View>
+          <Text style={styles.startPracticeArrow}>→</Text>
+        </TouchableOpacity>
 
         {/* Info Card */}
         <View style={styles.infoCard}>
@@ -102,6 +122,21 @@ const styles = StyleSheet.create({
   },
   title: { ...typography.headerLarge, textAlign: 'center', marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textLight, textAlign: 'center' },
+  startPracticeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    ...shadows.prominent,
+  },
+  startPracticeEmoji: { fontSize: 24, marginRight: spacing.md },
+  startPracticeContent: { flex: 1 },
+  startPracticeTitle: { ...typography.headerSmall, color: colors.textWhite, fontSize: 16 },
+  startPracticeDesc: { ...typography.caption, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  startPracticeArrow: { fontSize: 20, color: colors.textWhite, fontWeight: '700' },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',

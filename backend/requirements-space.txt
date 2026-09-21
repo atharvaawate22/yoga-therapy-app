@@ -1,0 +1,12 @@
+# Dependencies for the hosted deployment (e.g. Hugging Face Spaces).
+# Mirrors requirements.txt but uses server-optimized builds:
+#   - opencv-python-headless: no GUI/system-GL libs needed (this is a server)
+#   - tensorflow-cpu: smaller image + faster cold start than full tensorflow
+#     (Spaces free tier is CPU-only anyway)
+# Keep the versions in sync with requirements.txt.
+fastapi==0.135.3
+uvicorn[standard]==0.43.0
+numpy==2.4.4
+opencv-python-headless==4.13.0.92
+pydantic==2.12.5
+tensorflow-cpu==2.21.0

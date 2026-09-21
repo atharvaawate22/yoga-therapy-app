@@ -70,6 +70,10 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 2. App displays recommended poses with descriptions.
 3. Optional live pose corrector uses the backend.
 4. Pose results and corrections are shown in the UI.
+5. Timed guided practice (per condition, custom set, or single pose) plays poses
+   with prep/hold countdowns and voice cues.
+6. Completed sessions (guided practice + Surya Namaskar) are saved to
+   AsyncStorage and shown on the Progress screen (streak, weekly minutes, log).
 
 ## Key Files
 
@@ -79,12 +83,20 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 - Pose data: src/data/yogaData.js
 - Pose images: src/data/poseImages.js
 - Surya Namaskar flow: src/data/suryaNamaskarData.js
+- Practice history storage: src/data/sessionStorage.js
+- Timed practice player: src/screens/PracticeSessionScreen.js
+- Progress & history: src/screens/HistoryScreen.js
+- Settings (voice, reminders, data reset): src/screens/SettingsScreen.js
+- Daily reminders: src/utils/reminders.js (expo-notifications, local only)
+- Navigation: bottom tabs (Home / Progress / Settings) nested in a native stack;
+  favorites and the global voice preference live in src/data/userStorage.js
 
-### Backend
-- API server: yoga_pose_engine.py
-- Training script: train_movenet_classifier.py
-- Models: models/movenet_lightning.tflite, models/pose_classifier.keras
-- Labels: models/pose_labels.json
+### Backend (all under `backend/`)
+- API server: backend/yoga_pose_engine.py
+- Training script: backend/train_movenet_classifier.py
+- Evaluation: backend/eval_pose_metrics.py
+- Models: backend/models/movenet_lightning.tflite, backend/models/pose_classifier.keras
+- Labels: backend/models/pose_labels.json
 
 ## API Endpoints
 - GET /health
