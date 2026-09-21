@@ -10,3 +10,4 @@ numpy==2.4.4
 opencv-python-headless==4.13.0.92
 pydantic==2.12.5
 tensorflow-cpu==2.21.0
+Pillow==11.1.0

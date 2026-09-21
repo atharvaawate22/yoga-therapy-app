@@ -15,6 +15,7 @@ keeps import cheap and lets tests substitute stubs via
 from __future__ import annotations
 
 import base64
+import io
 import logging
 import os
 import time
@@ -25,6 +26,7 @@ import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 from utils.dataset import build_feature_dataset
@@ -230,8 +232,20 @@ def _decode_base64_image(image_b64: str) -> np.ndarray:
         buffer = base64.b64decode(image_b64, validate=False)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid base64 image payload") from exc
-    image = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
-    if image is None:
+    # Phone camera/gallery JPEGs store pixels in the sensor's native
+    # orientation and record the rotation the viewer should apply as an EXIF
+    # Orientation tag. cv2.imdecode ignores that tag entirely, so a portrait
+    # photo decodes sideways and the center-crop below then cuts off most of
+    # the body before MoveNet ever sees it. PIL's exif_transpose bakes the
+    # rotation into the pixels first.
+    try:
+        with Image.open(io.BytesIO(buffer)) as pil_image:
+            pil_image = ImageOps.exif_transpose(pil_image)
+            rgb_image = pil_image.convert("RGB")
+            image = cv2.cvtColor(np.array(rgb_image), cv2.COLOR_RGB2BGR)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not decode image") from exc
+    if image is None or image.size == 0:
         raise HTTPException(status_code=400, detail="Could not decode image")
     return image
 
