@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
@@ -9,7 +9,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import { colors, typography, spacing, borderRadius, screenStyles, shadows } from '../theme/theme';
 import { POSE_API_BASE_URL, POSE_API_ENDPOINTS, POSE_API_TIMEOUT_MS } from '../config/poseApi';
-import { getUserProfile } from '../data/userStorage';
+import { getUserProfile, getVoiceEnabled } from '../data/userStorage';
+import { savePracticeSession, formatDuration } from '../data/sessionStorage';
 import ExperienceBadge from '../components/ExperienceBadge';
 
 const defaultResult = {
@@ -44,11 +45,14 @@ const POSE_DISPLAY_NAMES = {
   ashwa_sanchalanasana: 'Ashwa Sanchalanasana',
   dandasana: 'Dandasana',
   ashtanga_namaskara: 'Ashtanga Namaskara',
-  bhujangasana: 'Bhujangasana',
-  adho_mukha_svanasana: 'Adho Mukha Svanasana',
-  uttanasana: 'Uttanasana',
+  cobra_pose: 'Bhujangasana',
   tadasana: 'Tadasana',
   nopose: 'No Pose',
+  // Retained for a classifier trained before these labels were merged into
+  // downward_dog / cobra_pose / forward_bend. A retrained model never emits them.
+  adho_mukha_svanasana: 'Adho Mukha Svanasana',
+  bhujangasana: 'Bhujangasana',
+  uttanasana: 'Uttanasana',
 };
 
 const PoseCorrectorScreen = ({ route }) => {
@@ -71,6 +75,10 @@ const PoseCorrectorScreen = ({ route }) => {
   const [liveError, setLiveError] = useState(null);
   const [experienceLevel, setExperienceLevel] = useState('beginner');
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isBackendOnline, setIsBackendOnline] = useState(null); // null = checking
+  const [liveSummary, setLiveSummary] = useState(null);
+  const liveStartTsRef = useRef(null);
+  const livePoseCountsRef = useRef({});
 
   const sessionId = useMemo(() => `session-${Date.now()}-${Math.floor(Math.random() * 1000000)}`, []);
   const apiUrl = useMemo(() => `${POSE_API_BASE_URL}${POSE_API_ENDPOINTS.analyze}`, []);
@@ -78,19 +86,37 @@ const PoseCorrectorScreen = ({ route }) => {
 
   useEffect(() => { requestPermission(); }, [requestPermission]);
 
+  // Ping the backend once on mount so users see upfront if analysis is unavailable
+  const checkBackend = useCallback(async () => {
+    setIsBackendOnline(null);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(healthUrl, { method: 'GET', signal: controller.signal });
+      clearTimeout(timeoutId);
+      setIsBackendOnline(response.ok);
+    } catch {
+      setIsBackendOnline(false);
+    }
+  }, [healthUrl]);
+
+  useEffect(() => { checkBackend(); }, [checkBackend]);
+
   useEffect(() => {
     ImagePicker.requestMediaLibraryPermissionsAsync();
     getUserProfile().then(p => { if (p?.experience) setExperienceLevel(p.experience); });
+    getVoiceEnabled().then(setIsVoiceEnabled);
   }, []);
 
-  // Cleanup speech and timer on unmount
+  // Cleanup speech and timer on unmount; save any in-progress live session
   useEffect(() => {
     return () => {
       liveDetectingRef.current = false;
       if (liveDetectionTimerRef.current) clearTimeout(liveDetectionTimerRef.current);
       Speech.stop();
+      finalizeLiveSession(false);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const speakCorrection = (corrections, pose) => {
     if (!isVoiceEnabled || !corrections?.length) return;
@@ -109,7 +135,7 @@ const PoseCorrectorScreen = ({ route }) => {
     });
   };
 
-  const analyzeBase64Image = async (imageBase64, source = 'image', cropConfirmed = false, showAlerts = true) => {
+  const analyzeBase64Image = async (imageBase64, source = 'image', showAlerts = true) => {
     if (!imageBase64 || isAnalyzing) return;
     const controller = new AbortController();
     let timeoutId;
@@ -123,7 +149,6 @@ const PoseCorrectorScreen = ({ route }) => {
           image_base64: imageBase64,
           session_id: sessionId,
           source,
-          crop_confirmed: cropConfirmed,
           experience_level: experienceLevel,
         }),
         signal: controller.signal,
@@ -141,8 +166,13 @@ const PoseCorrectorScreen = ({ route }) => {
       };
       setResult(newResult);
       setLastUpdated(new Date());
-      // Speak correction if live mode
+      setIsBackendOnline(true);
+      // Track detections + speak correction in live mode
       if (source === 'live') {
+        if (newResult.pose && newResult.pose !== 'nopose') {
+          livePoseCountsRef.current[newResult.pose] =
+            (livePoseCountsRef.current[newResult.pose] || 0) + 1;
+        }
         speakCorrection(newResult.corrections, newResult.pose);
       }
     } catch (error) {
@@ -151,6 +181,9 @@ const PoseCorrectorScreen = ({ route }) => {
         : error?.message === 'Network request failed'
           ? `Cannot reach API at ${apiUrl}. Start backend and ensure phone + laptop are on same Wi-Fi.`
           : error?.message || 'Failed to analyze pose.';
+      if (error?.name === 'AbortError' || error?.message === 'Network request failed') {
+        setIsBackendOnline(false);
+      }
       if (showAlerts) Alert.alert('Pose Analysis Error', message);
       else setLiveError(message);
     } finally {
@@ -170,11 +203,37 @@ const PoseCorrectorScreen = ({ route }) => {
       });
       if (!photo?.base64) throw new Error('Unable to capture frame from camera.');
       setSelectedImageUri(null);
-      await analyzeBase64Image(photo.base64, source, true, showAlerts);
+      await analyzeBase64Image(photo.base64, source, showAlerts);
     } catch (error) {
       const message = error?.message || 'Failed to analyze pose.';
       if (showAlerts) Alert.alert('Pose Analysis Error', message);
       else setLiveError(message);
+    }
+  };
+
+  // Save a live session to history if it was long enough to be meaningful
+  const finalizeLiveSession = (showSummary = true) => {
+    const startTs = liveStartTsRef.current;
+    liveStartTsRef.current = null;
+    if (!startTs) return;
+    const durationSec = Math.round((Date.now() - startTs) / 1000);
+    const counts = livePoseCountsRef.current || {};
+    const detected = Object.keys(counts);
+    if (durationSec < 15 || detected.length === 0) return;
+    const topPoseId = detected.sort((a, b) => counts[b] - counts[a])[0];
+    savePracticeSession({
+      type: 'corrector',
+      title: 'Pose Corrector',
+      posesCompleted: detected.length,
+      poseCount: detected.length,
+      durationSec,
+    });
+    if (showSummary) {
+      setLiveSummary({
+        durationSec,
+        poseCount: detected.length,
+        topPose: POSE_DISPLAY_NAMES[topPoseId] || topPoseId,
+      });
     }
   };
 
@@ -187,6 +246,7 @@ const PoseCorrectorScreen = ({ route }) => {
     Speech.stop();
     lastSpokenCorrectionRef.current = '';
     setIsLiveDetection(false);
+    finalizeLiveSession();
   };
 
   const runLiveLoop = () => {
@@ -201,7 +261,10 @@ const PoseCorrectorScreen = ({ route }) => {
     if (isLiveDetection || !cameraRef.current || !isCameraReady) return;
     setLiveError(null);
     setSelectedImageUri(null);
+    setLiveSummary(null);
     lastSpokenCorrectionRef.current = '';
+    liveStartTsRef.current = Date.now();
+    livePoseCountsRef.current = {};
     liveDetectingRef.current = true;
     setIsLiveDetection(true);
     runLiveLoop();
@@ -248,7 +311,7 @@ const PoseCorrectorScreen = ({ route }) => {
     const asset = picked.assets[0];
     if (!asset.base64) { Alert.alert('Invalid image', 'Unable to read selected image.'); return; }
     setSelectedImageUri(asset.uri ?? null);
-    await analyzeBase64Image(asset.base64, 'image', true);
+    await analyzeBase64Image(asset.base64, 'image');
   };
 
   const toggleCamera = () => {
@@ -299,6 +362,19 @@ const PoseCorrectorScreen = ({ route }) => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Live Pose Corrector</Text>
         <Text style={styles.subtitle}>Real-time AI pose detection with instant voice + visual corrections.</Text>
+
+        {/* Backend offline banner */}
+        {isBackendOnline === false && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineTitle}>⚠️ Analysis server unreachable</Text>
+            <Text style={styles.offlineText}>
+              Pose detection needs the backend running. Start it on your laptop and keep both devices on the same Wi-Fi.
+            </Text>
+            <TouchableOpacity style={styles.offlineRetryBtn} onPress={checkBackend} activeOpacity={0.8}>
+              <Text style={styles.offlineRetryText}>↻ Retry Connection</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Mode Toggle */}
         <View style={styles.featureSwitchCard}>
@@ -431,6 +507,17 @@ const PoseCorrectorScreen = ({ route }) => {
           )}
         </View>
 
+        {/* Live session summary */}
+        {liveSummary && feedbackMode === 'live' && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>✅ Session saved to your progress</Text>
+            <Text style={styles.summaryText}>
+              {formatDuration(liveSummary.durationSec)} practiced · {liveSummary.poseCount} pose
+              {liveSummary.poseCount !== 1 ? 's' : ''} detected · Most held: {liveSummary.topPose}
+            </Text>
+          </View>
+        )}
+
         {/* Result Card */}
         <View style={styles.resultCard}>
           <View style={styles.resultHeader}>
@@ -483,6 +570,23 @@ const styles = StyleSheet.create({
   centeredContainer: { ...screenStyles.container, justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
   title: { ...typography.headerMedium, color: colors.primary, marginBottom: 2 },
   subtitle: { ...typography.bodySmall, color: colors.textLight, marginBottom: spacing.md },
+  offlineBanner: {
+    backgroundColor: '#FFF8E1', borderRadius: borderRadius.lg, padding: spacing.md,
+    marginBottom: spacing.md, borderLeftWidth: 4, borderLeftColor: colors.warning,
+  },
+  offlineTitle: { ...typography.bodySmall, fontWeight: '700', color: '#795548' },
+  offlineText: { ...typography.caption, color: '#795548', marginTop: 4, lineHeight: 17 },
+  offlineRetryBtn: {
+    alignSelf: 'flex-start', backgroundColor: colors.warning, borderRadius: borderRadius.md,
+    paddingVertical: 8, paddingHorizontal: spacing.md, marginTop: spacing.sm,
+  },
+  offlineRetryText: { ...typography.caption, fontWeight: '700', color: colors.textWhite },
+  summaryCard: {
+    backgroundColor: colors.cardAlt, borderRadius: borderRadius.lg, padding: spacing.md,
+    marginBottom: spacing.md, borderLeftWidth: 4, borderLeftColor: colors.success,
+  },
+  summaryTitle: { ...typography.bodySmall, fontWeight: '700', color: colors.primary },
+  summaryText: { ...typography.caption, color: colors.textLight, marginTop: 4, lineHeight: 17 },
   liveFeedbackSection: { marginBottom: spacing.sm },
   featureSwitchCard: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg,

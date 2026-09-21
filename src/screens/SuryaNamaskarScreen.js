@@ -1,22 +1,55 @@
 /**
  * SuryaNamaskarScreen - 12-step sequence with round selection
  */
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import suryaNamaskarSteps from '../data/suryaNamaskarData';
 import RoundSelector from '../components/RoundSelector';
 import { resolveImageSource } from '../utils/imageUtils';
+import { savePracticeSession, formatDuration } from '../data/sessionStorage';
 
 const SuryaNamaskarScreen = ({ navigation }) => {
   const [rounds, setRounds] = useState(3);
   const [started, setStarted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
+  const startTimeRef = useRef(null);
 
   const step = suryaNamaskarSteps[currentStep];
   const imgSrc = resolveImageSource(step.image);
+
+  const handleStart = () => {
+    startTimeRef.current = Date.now();
+    setStarted(true);
+  };
+
+  const resetPractice = () => {
+    setStarted(false);
+    setCurrentStep(0);
+    setCurrentRound(1);
+  };
+
+  const handleComplete = async () => {
+    const durationSec = Math.round((Date.now() - startTimeRef.current) / 1000);
+    await savePracticeSession({
+      type: 'surya',
+      title: 'Surya Namaskar',
+      posesCompleted: rounds * suryaNamaskarSteps.length,
+      poseCount: rounds * suryaNamaskarSteps.length,
+      durationSec,
+    });
+    resetPractice();
+    Alert.alert(
+      'Practice Complete! 🎉',
+      `${rounds} round${rounds > 1 ? 's' : ''} of Surya Namaskar in ${formatDuration(durationSec)}.\nSaved to your progress.`,
+      [
+        { text: 'View Progress', onPress: () => navigation.navigate('MainTabs', { screen: 'History' }) },
+        { text: 'Done', style: 'cancel' },
+      ]
+    );
+  };
 
   const handleNext = () => {
     if (currentStep < suryaNamaskarSteps.length - 1) {
@@ -26,9 +59,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
       setCurrentStep(0);
     } else {
       // Completed all rounds
-      setStarted(false);
-      setCurrentStep(0);
-      setCurrentRound(1);
+      handleComplete();
     }
   };
 
@@ -79,7 +110,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
             })}
           </View>
 
-          <TouchableOpacity style={styles.startBtn} onPress={() => setStarted(true)} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.startBtn} onPress={handleStart} activeOpacity={0.85}>
             <Text style={styles.startBtnText}>Begin Practice →</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -145,7 +176,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.stopBtn}
-            onPress={() => { setStarted(false); setCurrentStep(0); setCurrentRound(1); }}
+            onPress={resetPractice}
             activeOpacity={0.8}
           >
             <Text style={styles.stopBtnText}>Stop</Text>

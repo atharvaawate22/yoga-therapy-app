@@ -4,14 +4,43 @@ A React Native mobile application built with Expo that helps users find recommen
 
 For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_WORKFLOW.md](PROJECT_WORKFLOW.md).
 
+## 📥 Download & Install (APK)
+
+This app is **not on the Play Store** — it installs directly as an Android APK.
+
+<p>
+  <a href="https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk">
+    <img src="https://img.shields.io/badge/⬇%20Download%20APK-Android-2E7D32?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" />
+  </a>
+</p>
+
+**[⬇ Direct download — yoga-therapy.apk](https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk)**
+(always points to the newest release; all versions on the
+[Releases page](https://github.com/atharvaawate22/yoga-therapy-app/releases))
+
+**Install & use:** see the **[USER_GUIDE.md](USER_GUIDE.md)** — it covers
+installing the APK, what works fully offline (almost everything), and how to
+set up the **Live Pose Corrector**, which needs the Python server running on
+a laptop on the **same Wi-Fi network** as your phone.
+
+> **Key point for APK users:** every feature (guided practice, timers, history,
+> streaks, custom sets, reminders…) works standalone with no server and no
+> internet. Only the camera-based Pose Corrector talks to the laptop server
+> over your local Wi-Fi — and the server's IP must be set in
+> `src/config/poseApi.js` (`fallbackHost`) **before building the APK**.
+> Details in the [user guide](USER_GUIDE.md).
+
 ## Features
 
-- 🧘 Browse health conditions and problems
-- 📋 View recommended yoga poses for each condition
-- ⏱️ See duration recommendations for each pose
-- 🎨 Modern wellness-themed UI design
-- 📱 Cross-platform (iOS, Android, Web)
-- 📷 Mobile camera pose-corrector screen (backend-powered)
+- 🩺 Browse 11 health conditions with recommended, experience-filtered poses
+- 🧘 Timed guided practice with voice cues, prep countdowns and pause/skip
+- ☀️ Surya Namaskar mode — 12-step guided rounds with breathing cues
+- 📊 Practice history: day streaks, weekly minutes, 7-day activity chart
+- 📋 Custom routines — build, edit, reorder and play your own pose sets
+- ❤️ Favorite poses, surfaced on the Home screen
+- 🔔 Daily practice reminder notifications (local, no account needed)
+- 📷 AI Live Pose Corrector with spoken corrections (backend-powered)
+- ⚙️ Bottom-tab navigation (Home / Progress / Settings) with a wellness-themed UI
 
 ## Tech Stack
 
@@ -28,35 +57,41 @@ For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_W
 
 ## Project Structure
 
+The React Native app lives at the repository root; the Python pose-analysis
+service is self-contained under `backend/`.
+
 ```
-├── App.js                          # Main app entry point
-├── app.json / app.config.js        # Expo configuration
+├── App.js                          # App entry point
+├── app.config.js                   # Expo configuration (single source)
+├── eas.json                        # EAS build profiles (APK output)
 ├── package.json                    # JS dependencies
-├── babel.config.js                 # Babel configuration
-├── assets/                         # App icons and pose images
+├── assets/poses/                   # Local pose reference images (see assets/README.md)
 ├── src/
-│   ├── components/                # ProblemCard, PoseCard, RoundSelector, ExperienceBadge
-│   ├── screens/                   # Home, Pose, PoseDetail, PoseCorrector, HealthScan,
-│   │                              # SuryaNamaskar, CustomSet, ProfileSetup screens
-│   ├── data/                      # yogaData, poseImages, suryaNamaskarData, proTips, userStorage
-│   ├── config/
-│   │   └── poseApi.js             # Backend API base URL and endpoints
-│   ├── theme/                     # Centralized theme styles
-│   ├── utils/                     # Image helpers
-│   └── navigation/                # Navigation configuration
+│   ├── components/                 # ProblemCard, PoseCard, RoundSelector, ExperienceBadge
+│   ├── screens/                    # Home, Pose, PoseDetail, PoseCorrector, HealthScan,
+│   │                               # SuryaNamaskar, CustomSet, ProfileSetup,
+│   │                               # PracticeSession, History, Settings
+│   ├── data/                       # yogaData, poseImages, suryaNamaskarData, proTips,
+│   │                               # userStorage, sessionStorage
+│   ├── config/poseApi.js           # Backend API base URL and endpoints
+│   ├── navigation/                 # Bottom tabs + native stack
+│   ├── theme/                      # Centralized design system
+│   └── utils/                      # imageUtils, reminders
 │
-├── yoga_pose_engine.py             # FastAPI backend (pose detection + corrections)
-├── train_movenet_classifier.py     # Training script for the pose classifier
-├── eval_pose_metrics.py            # Evaluation metrics for the classifier
-├── requirements.txt                # Python dependencies
-└── models/                         # MoveNet TFLite model, trained classifier, labels
+└── backend/                        # Python pose-analysis service (independent of the app)
+    ├── yoga_pose_engine.py         # FastAPI server (pose detection + corrections)
+    ├── train_movenet_classifier.py # Training script for the pose classifier
+    ├── eval_pose_metrics.py        # Evaluation metrics for the classifier
+    ├── requirements.txt            # Python dependencies
+    └── models/                     # MoveNet TFLite model, trained classifier, labels
 ```
 
-> **Note:** The training image datasets (`yoga_poses/`, `dataset/`) are not included
-> in this repository due to their size. The trained models in `models/` are included,
-> so the app and backend work without the raw dataset. To retrain, place class-labeled
-> image folders under `yoga_poses/train` and `yoga_poses/test` and run
-> `python train_movenet_classifier.py`.
+> **Note:** The training image datasets (`backend/yoga_poses/`, `backend/dataset/`)
+> are not included in this repository due to their size. The trained models in
+> `backend/models/` are included, so the app and backend work without the raw
+> dataset. To retrain, place class-labeled image folders under
+> `backend/yoga_poses/train` and `backend/yoga_poses/test` and run
+> `python train_movenet_classifier.py` from inside `backend/`.
 
 ## Getting Started
 
@@ -93,10 +128,12 @@ For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_W
 ### Running the Pose-Analysis Backend
 
 The live pose corrector requires the Python backend to be running on a machine
-reachable from your phone (same Wi-Fi network).
+reachable from your phone (same Wi-Fi network). All backend commands run from
+the `backend/` folder.
 
 1. Create and activate a virtual environment (Python 3.11 recommended):
    ```bash
+   cd backend
    python -m venv .venv
    # Windows
    .venv\Scripts\activate
@@ -118,11 +155,15 @@ reachable from your phone (same Wi-Fi network).
 
 ## Mobile Pose Corrector Integration
 
-This app now includes a mobile screen that captures a camera frame and sends it to a Python backend for pose analysis.
+This app includes a mobile screen that captures a camera frame and sends it to a Python backend for pose analysis.
 
 1. Open the app and tap **Live Mobile Pose Corrector** on the home screen.
-2. Update API base URL in `src/config/poseApi.js` to your server LAN IP.
-3. Ensure your phone and backend machine are on the same Wi-Fi network.
+2. Ensure your phone and backend machine are on the same Wi-Fi network.
+3. **In development (Expo Go):** the server address is auto-detected from your
+   dev machine — no configuration needed.
+   **In an installed APK:** the app uses the `fallbackHost` IP hardcoded in
+   `src/config/poseApi.js`, so set it to your laptop's LAN IP *before building*.
+   See [USER_GUIDE.md](USER_GUIDE.md) for the full setup and troubleshooting guide.
 
 ### Expected Backend Endpoint
 
@@ -157,11 +198,14 @@ Your existing laptop Python script should run as a service endpoint that accepts
 - Back Pain
 - Hip Alignment Issue
 - Scapula Winging
+- Knee Pain
+- Poor Posture
 - Headache
 - Stress
 - Anxiety
-- Poor Posture
 - Insomnia
+- Digestion Issues
+- Weight Loss
 
 ## Theme Colors
 

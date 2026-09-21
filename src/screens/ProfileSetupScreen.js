@@ -1,13 +1,14 @@
 /**
  * ProfileSetupScreen - Onboarding screen for user profile
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform
+  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import { setUserProfile, setOnboarded } from '../data/userStorage';
+import { REMINDER_OPTIONS, getReminderSetting, applyReminderSetting } from '../utils/reminders';
 
 const experienceLevels = [
   { key: 'beginner', label: 'Beginner', emoji: '🌱', desc: 'New to yoga, gentle corrections' },
@@ -27,6 +28,11 @@ const ProfileSetupScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [selectedAge, setSelectedAge] = useState('26-35');
   const [experience, setExperience] = useState('beginner');
+  const [reminder, setReminder] = useState('off');
+
+  useEffect(() => {
+    getReminderSetting().then(r => setReminder(r.key));
+  }, []);
 
   const handleContinue = async () => {
     const ageObj = ageRanges.find(a => a.key === selectedAge);
@@ -37,7 +43,14 @@ const ProfileSetupScreen = ({ navigation }) => {
       experience,
     });
     await setOnboarded();
-    navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+    const result = await applyReminderSetting(reminder);
+    if (!result.ok && result.reason === 'permission-denied') {
+      Alert.alert(
+        'Notifications Disabled',
+        'Reminder was not set because notification permission is off. Enable notifications in your device settings and try again.'
+      );
+    }
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
   };
 
   return (
@@ -108,6 +121,28 @@ const ProfileSetupScreen = ({ navigation }) => {
             ))}
           </View>
 
+          {/* Daily Reminder */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>DAILY PRACTICE REMINDER</Text>
+            <View style={styles.chipRow}>
+              {REMINDER_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.chip, reminder === opt.key && styles.chipActive]}
+                  onPress={() => setReminder(opt.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, reminder === opt.key && styles.chipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.sectionHint}>
+              We'll send one gentle nudge a day to keep your streak going.
+            </Text>
+          </View>
+
           {/* Continue Button */}
           <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} activeOpacity={0.85}>
             <Text style={styles.continueBtnText}>Start My Journey →</Text>
@@ -144,6 +179,11 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.primary,
     marginBottom: spacing.sm,
+  },
+  sectionHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
   },
   input: {
     backgroundColor: colors.card,

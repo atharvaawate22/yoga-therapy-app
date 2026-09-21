@@ -35,7 +35,7 @@ const suryaNamaskarSteps = [
     description: "Fold forward from the hips, bringing hands to the floor beside feet.",
     duration: 5,
     image: getPoseImage("forward_bend"),
-    expectedPoseId: "uttanasana",
+    expectedPoseId: "forward_bend",
     breathing: "Exhale",
     steps: ["Exhale and bend forward", "Keep spine long as you fold", "Bring hands to floor beside feet", "Bring nose close to knees"]
   },
@@ -79,7 +79,7 @@ const suryaNamaskarSteps = [
     description: "Slide forward, lift chest into cobra. Keep elbows slightly bent.",
     duration: 5,
     image: getPoseImage("cobra_pose"),
-    expectedPoseId: "bhujangasana",
+    expectedPoseId: "cobra_pose",
     breathing: "Inhale",
     steps: ["Slide forward on the mat", "Lift chest off the floor", "Keep elbows close to body", "Look upward, open chest"]
   },
@@ -90,7 +90,7 @@ const suryaNamaskarSteps = [
     description: "Lift hips up and back to form an inverted V shape.",
     duration: 8,
     image: getPoseImage("downward_dog"),
-    expectedPoseId: "adho_mukha_svanasana",
+    expectedPoseId: "downward_dog",
     breathing: "Exhale",
     steps: ["Tuck toes and lift hips up", "Form inverted V shape", "Press heels toward floor", "Hold for several breaths"]
   },
@@ -112,7 +112,7 @@ const suryaNamaskarSteps = [
     description: "Bring left foot forward to meet right, fold forward.",
     duration: 5,
     image: getPoseImage("forward_bend"),
-    expectedPoseId: "uttanasana",
+    expectedPoseId: "forward_bend",
     breathing: "Exhale",
     steps: ["Step left foot forward", "Feet together, fold forward", "Keep legs straight if possible", "Relax head and neck"]
   },

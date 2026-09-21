@@ -1,34 +1,29 @@
-# Yoga Therapy App Assets
+# App Assets
 
-This folder contains the app icons and splash screen images.
+## `poses/`
 
-## Required Assets
+Local pose reference images bundled into the app. These six are `require()`d by
+[`src/data/poseImages.js`](../src/data/poseImages.js); every other pose falls
+back to a curated remote image, so only add a file here if you also register it
+in `poseImages.js`.
 
-For production, replace these placeholder files with actual images:
+| File | Pose |
+|------|------|
+| `downward_dog.png` | Adho Mukha Svanasana |
+| `low_lunge.png` | Anjaneyasana |
+| `seated_twist.png` | Ardha Matsyendrasana |
+| `butterfly_pose.png` | Baddha Konasana |
+| `childs_pose.png` | Balasana |
+| `cat_cow.png` | Bitilasana–Marjaryasana |
 
-- `icon.png` - App icon (1024x1024 recommended)
-- `splash.png` - Splash screen image (1242x2436 recommended)
-- `adaptive-icon.png` - Android adaptive icon (1024x1024 recommended)
-- `favicon.png` - Web favicon (48x48)
+**Format:** must be genuine PNG files (real PNG signature, not JPEG data renamed
+to `.png`) — the Android release build's resource compiler (AAPT2) rejects
+mislabeled images, even though the Metro bundler tolerates them.
 
-## Image Specifications
+## App icon & splash
 
-### icon.png
-- Size: 1024x1024 pixels
-- Format: PNG
-- Use: App store icon, home screen
-
-### splash.png
-- Size: 1242x2436 pixels (or your target resolution)
-- Format: PNG
-- Use: Loading screen when app starts
-
-### adaptive-icon.png
-- Size: 1024x1024 pixels
-- Format: PNG
-- Use: Android adaptive icon foreground
-
-### favicon.png
-- Size: 48x48 pixels
-- Format: PNG
-- Use: Web browser favicon
+No custom icon/splash image files are committed yet; the app currently uses
+Expo defaults with the theme background color set in
+[`app.config.js`](../app.config.js). To brand the app, add `icon.png` (1024×1024)
+and an adaptive icon, then reference them under `android.adaptiveIcon` / `ios` in
+`app.config.js`.

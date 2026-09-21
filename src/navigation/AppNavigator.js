@@ -1,9 +1,10 @@
 /**
- * AppNavigator - Navigation with all routes including new screens
+ * AppNavigator - Bottom tabs (Home / Progress / Settings) inside a native stack
  */
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors, typography } from '../theme/theme';
 import { isOnboarded } from '../data/userStorage';
 
@@ -16,8 +17,12 @@ import PoseDetailScreen from '../screens/PoseDetailScreen';
 import CustomSetScreen from '../screens/CustomSetScreen';
 import SuryaNamaskarScreen from '../screens/SuryaNamaskarScreen';
 import HealthScanScreen from '../screens/HealthScanScreen';
+import PracticeSessionScreen from '../screens/PracticeSessionScreen';
+import HistoryScreen from '../screens/HistoryScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
 const defaultScreenOptions = {
   headerStyle: { backgroundColor: colors.background },
@@ -26,6 +31,44 @@ const defaultScreenOptions = {
   headerShadowVisible: false,
   animation: 'slide_from_right',
 };
+
+const TabIcon = ({ emoji, focused }) => (
+  <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
+);
+
+const MainTabs = () => (
+  <Tab.Navigator
+    screenOptions={{
+      headerShown: false,
+      tabBarActiveTintColor: colors.primary,
+      tabBarInactiveTintColor: colors.textMuted,
+      tabBarStyle: {
+        backgroundColor: colors.card,
+        borderTopColor: colors.borderLight,
+      },
+      tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+    }}
+  >
+    <Tab.Screen
+      name="Home"
+      component={HomeScreen}
+      options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} /> }}
+    />
+    <Tab.Screen
+      name="History"
+      component={HistoryScreen}
+      options={{
+        title: 'Progress',
+        tabBarIcon: ({ focused }) => <TabIcon emoji="📊" focused={focused} />,
+      }}
+    />
+    <Tab.Screen
+      name="Settings"
+      component={SettingsScreen}
+      options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} /> }}
+    />
+  </Tab.Navigator>
+);
 
 const AppNavigator = () => {
   const [loading, setLoading] = useState(true);
@@ -48,7 +91,7 @@ const AppNavigator = () => {
 
   return (
     <Stack.Navigator
-      initialRouteName={showOnboarding ? 'ProfileSetup' : 'Home'}
+      initialRouteName={showOnboarding ? 'ProfileSetup' : 'MainTabs'}
       screenOptions={defaultScreenOptions}
     >
       <Stack.Screen
@@ -57,8 +100,8 @@ const AppNavigator = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name="Home"
-        component={HomeScreen}
+        name="MainTabs"
+        component={MainTabs}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -90,6 +133,11 @@ const AppNavigator = () => {
         name="HealthScan"
         component={HealthScanScreen}
         options={{ title: 'Health Scanner', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="PracticeSession"
+        component={PracticeSessionScreen}
+        options={{ title: 'Practice', headerBackTitle: 'Back' }}
       />
     </Stack.Navigator>
   );
