@@ -217,7 +217,13 @@ const PoseCorrectorScreen = ({ route }) => {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
         quality: source === 'live' ? 0.3 : 0.5,
-        skipProcessing: true,
+        // skipProcessing returns the raw, un-rotated sensor frame (only an
+        // EXIF orientation tag notes the correction), which the backend's
+        // OpenCV decode doesn't reliably honor -- it then center-crops a
+        // square from the wrong orientation, cutting off most of the body
+        // before MoveNet ever sees it. Letting the camera normalize
+        // orientation costs a little capture speed but is required for
+        // the body-presence gate to actually see a full body.
         shutterSound: false,
       });
       if (!photo?.base64) throw new Error('Unable to capture frame from camera.');
