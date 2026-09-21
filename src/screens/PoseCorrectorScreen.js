@@ -157,7 +157,14 @@ const PoseCorrectorScreen = ({ route }) => {
       });
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(text || 'Pose API request failed.');
+        const error = new Error(text || 'Pose API request failed.');
+        // A gateway/service-unavailable status (502/503/504) means the
+        // backend infra itself didn't respond in time -- e.g. a cold
+        // serverless container taking longer to start than the gateway's
+        // own timeout allows -- not a real application error, so it's
+        // handled the same as an unreachable backend below.
+        error.isGatewayUnavailable = [502, 503, 504].includes(response.status);
+        throw error;
       }
       const payload = await response.json();
       const newResult = {
@@ -179,7 +186,9 @@ const PoseCorrectorScreen = ({ route }) => {
         speakCorrection(newResult.corrections, newResult.pose);
       }
     } catch (error) {
-      const isUnreachable = error?.name === 'AbortError' || error?.message === 'Network request failed';
+      const isUnreachable = error?.name === 'AbortError'
+        || error?.message === 'Network request failed'
+        || error?.isGatewayUnavailable;
       if (isUnreachable) {
         // Show the offline banner (with Retry), then fall back to a simulated
         // result so the corrector still demonstrates the feature end-to-end.

@@ -10,9 +10,13 @@
 
 import Constants from 'expo-constants';
 
-// Deployed backend (Render, Docker web service under backend/). Free tier
-// spins down after inactivity — first request after idle can take ~50s.
-const HOSTED_API_URL = 'https://yoga-pose-engine.onrender.com';
+// Deployed backend: AWS Lambda (container image) behind an API Gateway HTTP
+// API, built from backend/Dockerfile.lambda. A bare Lambda Function URL was
+// tried first but this AWS account silently blocks anonymous Function URL
+// invocation (returns 403 with a correctly-configured public resource
+// policy) -- API Gateway routes around that. Also available: Render
+// (https://yoga-pose-engine.onrender.com, Docker web service under backend/).
+const HOSTED_API_URL = 'https://vb57jykmzc.execute-api.us-east-1.amazonaws.com';
 
 const expoHostUri = Constants.expoConfig?.hostUri || '';
 const detectedHost = expoHostUri.split(':')[0] || '';
