@@ -35,6 +35,9 @@ from utils.model import load_classifier, load_labels, save_classifier, train_cla
 from utils.movenet import MoveNetRuntime
 from utils.paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MOVENET_MODEL_PATH
 from utils.preprocessing import (
+    CORE_KEYPOINTS,
+    KEYPOINT_NAMES,
+    MAJOR_KEYPOINTS,
     SKELETON_DRAW_MIN_SCORE,
     SKELETON_EDGES,
     extract_keypoints_pixels,
@@ -248,6 +251,21 @@ def _decode_base64_image(image_b64: str) -> np.ndarray:
     if image is None or image.size == 0:
         raise HTTPException(status_code=400, detail="Could not decode image")
     return image
+
+
+def _describe_gate_failure(keypoints: np.ndarray) -> str:
+    """Compact, human-readable dump of why ``has_body`` rejected a frame.
+
+    Temporary diagnostic aid: surfaced both in logs and in the API response
+    itself (folded into the "No full-body skeleton detected" correction
+    text) so a screenshot from a failing device carries the actual keypoint
+    confidence scores, without needing CloudWatch access to see them.
+    """
+    core_scores = ", ".join(
+        f"{KEYPOINT_NAMES[idx]}={keypoints[idx, 2]:.2f}" for idx in CORE_KEYPOINTS
+    )
+    major_visible = sum(1 for idx in MAJOR_KEYPOINTS if keypoints[idx, 2] >= 0.15)
+    return f"core: {core_scores} | major_visible: {major_visible}/9"
 
 
 def _draw_skeleton_base64(image_bgr: np.ndarray, keypoints: np.ndarray) -> Optional[str]:
@@ -623,13 +641,17 @@ def analyze_pose(
     logger.debug("keypoints=%s", np.round(keypoints, 3).tolist())
 
     if skeleton_base64 is None or not has_body(keypoints):
+        diagnostic = _describe_gate_failure(keypoints)
         logger.info(
-            "source=%s pose=%s reason=no_body latency_ms=%.0f",
+            "source=%s pose=%s reason=no_body latency_ms=%.0f %s",
             payload.source,
             NO_POSE,
             (time.perf_counter() - started) * 1000,
+            diagnostic,
         )
-        return _response_for_nopose("No full-body skeleton detected", skeleton_base64)
+        return _response_for_nopose(
+            f"No full-body skeleton detected ({diagnostic})", skeleton_base64
+        )
 
     normalized = normalize_keypoints(keypoints)
     logger.debug("normalized=%s", np.round(normalized, 4).tolist())
