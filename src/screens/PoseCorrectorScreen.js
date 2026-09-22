@@ -65,7 +65,11 @@ const PoseCorrectorScreen = ({ route }) => {
   const lastSpokenCorrectionRef = useRef('');
 
   const [permission, requestPermission] = useCameraPermissions();
-  const [cameraFacing, setCameraFacing] = useState('front');
+  // Rear camera by default: fitting a standing full-body pose into frame
+  // with the front (selfie) camera needs an awkward arm's-length distance
+  // and a narrower field of view, which was making the body-presence gate
+  // fail even with a correctly working pipeline. Users can still flip back.
+  const [cameraFacing, setCameraFacing] = useState('back');
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLiveDetection, setIsLiveDetection] = useState(false);
@@ -338,8 +342,13 @@ const PoseCorrectorScreen = ({ route }) => {
       Alert.alert('Permission needed', 'Please allow gallery access to pick an image.');
       return;
     }
+    // allowsEditing opens a manual crop step with no aspect ratio enforced --
+    // its initial crop box is not the full image, so a user who taps confirm
+    // without dragging it out to the edges silently sends a cropped photo
+    // that's already missing body parts, no matter what the backend does
+    // with it. Send the original full photo instead.
     const picked = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true, quality: 0.45, base64: true, mediaTypes: ['images'],
+      allowsEditing: false, quality: 0.45, base64: true, mediaTypes: ['images'],
     });
     if (picked.canceled || !picked.assets?.length) return;
     const asset = picked.assets[0];
