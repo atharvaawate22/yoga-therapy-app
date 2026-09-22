@@ -21,7 +21,7 @@ __all__ = [
     "KEYPOINT_NAMES",
     "SKELETON_EDGES",
     "SKELETON_DRAW_MIN_SCORE",
-    "center_crop_square",
+    "pad_to_square",
     "preprocess_for_movenet",
     "extract_keypoints_pixels",
     "normalize_keypoints",
@@ -79,31 +79,42 @@ MAJOR_MIN_SCORE = 0.15
 MIN_MAJOR_VISIBLE = 7
 
 
-def center_crop_square(image: np.ndarray) -> np.ndarray:
-    """Crop the largest centered square.
+def pad_to_square(image: np.ndarray) -> np.ndarray:
+    """Pad the image to the smallest centered square, preserving every pixel.
 
-    MoveNet wants a square input. Cropping preserves the aspect ratio; resizing
-    a non-square frame directly would stretch the body and shift every joint
-    angle the classifier depends on.
+    MoveNet wants a square input. A full-body photo shot in portrait (the
+    normal way to frame a standing pose on a phone) fills nearly the entire
+    vertical frame, so center-*cropping* to a square reliably chopped off
+    the head and/or feet before MoveNet ever saw them -- the classifier's
+    body-presence gate then rejected the frame outright. Padding instead of
+    cropping keeps the full body in view. Downstream keypoint normalization
+    is translation- and scale-invariant (relative to the hip midpoint and
+    torso width), so it is unaffected by the extra border.
     """
     height, width = image.shape[:2]
-    side = min(height, width)
-    y0 = (height - side) // 2
-    x0 = (width - side) // 2
-    return image[y0 : y0 + side, x0 : x0 + side]
+    side = max(height, width)
+    pad_vertical = side - height
+    pad_horizontal = side - width
+    top = pad_vertical // 2
+    bottom = pad_vertical - top
+    left = pad_horizontal // 2
+    right = pad_horizontal - left
+    return cv2.copyMakeBorder(
+        image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
+    )
 
 
 def preprocess_for_movenet(image_bgr: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Take a decoded BGR image to the exact tensor-ready RGB crop.
+    """Take a decoded BGR image to the exact tensor-ready RGB square.
 
-    Returns ``(cropped_bgr, cropped_rgb)`` — the BGR copy is what skeleton
+    Returns ``(padded_bgr, padded_rgb)`` — the BGR copy is what skeleton
     overlays get drawn on, so debug images line up with the analyzed pixels.
 
     Call this from every entry point. It is the anti-skew contract.
     """
-    cropped_bgr = center_crop_square(image_bgr)
-    cropped_rgb = cv2.cvtColor(cropped_bgr, cv2.COLOR_BGR2RGB)
-    return cropped_bgr, cropped_rgb
+    padded_bgr = pad_to_square(image_bgr)
+    padded_rgb = cv2.cvtColor(padded_bgr, cv2.COLOR_BGR2RGB)
+    return padded_bgr, padded_rgb
 
 
 def extract_keypoints_pixels(output: np.ndarray, width: int, height: int) -> np.ndarray:

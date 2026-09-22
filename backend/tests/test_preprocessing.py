@@ -11,10 +11,10 @@ import pytest
 
 from utils.preprocessing import (
     FEATURE_DIM,
-    center_crop_square,
     extract_keypoints_pixels,
     has_body,
     normalize_keypoints,
+    pad_to_square,
     preprocess_for_movenet,
 )
 
@@ -25,36 +25,46 @@ def keypoints_from(output: np.ndarray, width: int = 640, height: int = 640) -> n
     return extract_keypoints_pixels(output, width, height)
 
 
-# ── Cropping ──────────────────────────────────────────────────────────────
+# ── Padding ───────────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize(
     "shape,expected_side",
-    [((480, 640, 3), 480), ((640, 480, 3), 480), ((300, 300, 3), 300)],
+    [((480, 640, 3), 640), ((640, 480, 3), 640), ((300, 300, 3), 300)],
 )
-def test_center_crop_produces_a_square(shape, expected_side: int) -> None:
-    cropped = center_crop_square(np.zeros(shape, dtype=np.uint8))
+def test_pad_to_square_produces_a_square(shape, expected_side: int) -> None:
+    padded = pad_to_square(np.zeros(shape, dtype=np.uint8))
 
-    assert cropped.shape[0] == cropped.shape[1] == expected_side
+    assert padded.shape[0] == padded.shape[1] == expected_side
 
 
-def test_center_crop_takes_the_middle() -> None:
+def test_pad_to_square_preserves_every_source_pixel() -> None:
     image = np.zeros((100, 200, 3), dtype=np.uint8)
-    image[:, 50:150] = 255  # centred white band, exactly the crop window
+    image[:, :] = 255  # solid white source image
 
-    assert np.all(center_crop_square(image) == 255)
+    padded = pad_to_square(image)
+
+    assert padded.shape[:2] == (200, 200)
+    # The original content lands, unmodified, at the vertical offset the
+    # padding added -- nothing from the source frame is cropped away.
+    assert np.all(padded[50:150, :] == 255)
+    # The padding itself is a distinct fill color, not more source content.
+    assert np.all(padded[0, :] != 255)
+    assert np.all(padded[199, :] != 255)
 
 
-def test_preprocess_returns_matching_bgr_and_rgb_crops() -> None:
+def test_preprocess_returns_matching_bgr_and_rgb_squares() -> None:
     image = np.zeros((480, 640, 3), dtype=np.uint8)
     image[:, :, 2] = 255  # pure red in BGR
 
-    cropped_bgr, cropped_rgb = preprocess_for_movenet(image)
+    padded_bgr, padded_rgb = preprocess_for_movenet(image)
 
-    assert cropped_bgr.shape == cropped_rgb.shape == (480, 480, 3)
+    assert padded_bgr.shape == padded_rgb.shape == (640, 640, 3)
     # Channel order really was swapped, so overlays and tensors agree on pixels.
-    assert cropped_bgr[0, 0, 2] == 255
-    assert cropped_rgb[0, 0, 0] == 255
+    # Row 0 is padding, so check a row known to still hold source content.
+    top_pad = (640 - 480) // 2
+    assert padded_bgr[top_pad, 0, 2] == 255
+    assert padded_rgb[top_pad, 0, 0] == 255
 
 
 # ── Keypoint extraction ───────────────────────────────────────────────────
