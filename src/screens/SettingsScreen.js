@@ -5,6 +5,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import { getUserProfile, getVoiceEnabled, setVoiceEnabled } from '../data/userStorage';
 import { clearPracticeSessions } from '../data/sessionStorage';
@@ -72,21 +73,24 @@ const SettingsScreen = ({ navigation }) => {
           activeOpacity={0.8}
         >
           <View style={styles.profileAvatar}>
-            <Text style={styles.profileAvatarText}>👤</Text>
+            <Ionicons name="person" size={22} color={colors.primary} />
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{profile?.name || 'Yogi'}</Text>
             {profile && <ExperienceBadge level={profile.experience} small />}
           </View>
-          <Text style={styles.rowArrow}>→</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
         {/* Practice preferences */}
         <Text style={styles.sectionLabel}>PRACTICE</Text>
         <View style={styles.card}>
           <View style={styles.row}>
+            <View style={styles.rowIconBox}>
+              <Ionicons name="volume-high-outline" size={18} color={colors.primary} />
+            </View>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>🔊 Voice guidance</Text>
+              <Text style={styles.rowTitle}>Voice guidance</Text>
               <Text style={styles.rowDesc}>Spoken cues in guided practice and pose corrector</Text>
             </View>
             <Switch
@@ -101,6 +105,12 @@ const SettingsScreen = ({ navigation }) => {
         {/* Reminder */}
         <Text style={styles.sectionLabel}>DAILY REMINDER</Text>
         <View style={styles.card}>
+          <View style={styles.rowHeader}>
+            <View style={styles.rowIconBox}>
+              <Ionicons name="notifications-outline" size={18} color={colors.primary} />
+            </View>
+            <Text style={styles.rowTitle}>Reminder time</Text>
+          </View>
           <View style={styles.chipRow}>
             {REMINDER_OPTIONS.map(opt => (
               <TouchableOpacity
@@ -121,10 +131,14 @@ const SettingsScreen = ({ navigation }) => {
         {/* Data */}
         <Text style={styles.sectionLabel}>DATA</Text>
         <TouchableOpacity style={styles.dangerCard} onPress={handleClearHistory} activeOpacity={0.8}>
-          <Text style={styles.dangerText}>🗑️ Clear practice history</Text>
+          <Ionicons name="trash-outline" size={18} color={colors.error} />
+          <Text style={styles.dangerText}>Clear practice history</Text>
         </TouchableOpacity>
 
-        <Text style={styles.footer}>Yoga Therapy App · v1.0.0{'\n'}🌿 Practice safely.</Text>
+        <View style={styles.footerRow}>
+          <Ionicons name="leaf-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.footer}>Yoga Therapy App · v1.0.0{'\n'}Practice safely.</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -148,16 +162,19 @@ const styles = StyleSheet.create({
     width: 48, height: 48, borderRadius: 24, backgroundColor: colors.cardAlt,
     justifyContent: 'center', alignItems: 'center', marginRight: spacing.md,
   },
-  profileAvatarText: { fontSize: 22 },
   profileInfo: { flex: 1, gap: 4 },
   profileName: { ...typography.headerSmall, fontSize: 16, color: colors.text },
-  rowArrow: { fontSize: 18, color: colors.textMuted },
 
   card: {
     backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md,
     ...shadows.card, borderWidth: 1, borderColor: colors.borderLight,
   },
   row: { flexDirection: 'row', alignItems: 'center' },
+  rowHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  rowIconBox: {
+    width: 34, height: 34, borderRadius: borderRadius.sm, backgroundColor: colors.cardAlt,
+    justifyContent: 'center', alignItems: 'center', marginRight: spacing.sm,
+  },
   rowText: { flex: 1, marginRight: spacing.sm },
   rowTitle: { ...typography.bodySmall, fontWeight: '700', color: colors.text },
   rowDesc: { ...typography.caption, color: colors.textMuted, marginTop: 3, lineHeight: 16 },
@@ -173,14 +190,19 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.textWhite },
 
   dangerCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     backgroundColor: colors.expertBg, borderRadius: borderRadius.lg, padding: spacing.md,
     borderWidth: 1, borderColor: '#FFCDD2',
   },
   dangerText: { ...typography.bodySmall, fontWeight: '700', color: colors.error },
 
+  footerRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginTop: spacing.xl,
+  },
   footer: {
     ...typography.caption, color: colors.textMuted, textAlign: 'center',
-    marginTop: spacing.xl, lineHeight: 18,
+    lineHeight: 18,
   },
 });
 

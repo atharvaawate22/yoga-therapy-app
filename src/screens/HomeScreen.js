@@ -5,13 +5,16 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import yogaData, { getAllPoses } from '../data/yogaData';
 import { getUserProfile, getFavoriteIds } from '../data/userStorage';
 import { getPracticeStats } from '../data/sessionStorage';
 import { resolveImageSource } from '../utils/imageUtils';
 import ProblemCard from '../components/ProblemCard';
 import ExperienceBadge from '../components/ExperienceBadge';
+import WeeklyStreakStrip from '../components/WeeklyStreakStrip';
 
 const HomeScreen = ({ navigation }) => {
   const [profile, setProfile] = useState(null);
@@ -57,50 +60,60 @@ const HomeScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('ProfileSetup')}
               activeOpacity={0.8}
             >
-              <Text style={styles.profileBtnText}>👤</Text>
+              <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
             </TouchableOpacity>
           </View>
           {profile && (
             <View style={styles.headerBadge}>
               <ExperienceBadge level={profile.experience} />
-              {stats?.currentStreakDays > 0 && (
-                <TouchableOpacity
-                  style={styles.streakChip}
-                  onPress={() => navigation.navigate('History')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.streakChipText}>
-                    🔥 {stats.currentStreakDays} day streak
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           )}
         </View>
 
+        {/* ── Weekly streak ── */}
+        {stats && (stats.totalSessions > 0) && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('History')}
+            activeOpacity={0.9}
+          >
+            <WeeklyStreakStrip
+              last7Days={stats.last7Days}
+              currentStreakDays={stats.currentStreakDays}
+            />
+          </TouchableOpacity>
+        )}
+
         {/* ── Hero Banner: Live Pose Corrector (main feature) ── */}
         <TouchableOpacity
-          style={styles.poseCoachBanner}
           onPress={() => navigation.navigate('PoseCorrector')}
           activeOpacity={0.88}
         >
-          <View style={styles.poseCoachLeft}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveLabel}>LIVE</Text>
-          </View>
-          <View style={styles.poseCoachCenter}>
-            <Text style={styles.poseCoachEmoji}>📸</Text>
-            <View>
-              <Text style={styles.poseCoachTitle}>Live Mobile Pose Corrector</Text>
-              <Text style={styles.poseCoachDesc}>
-                Open camera · AI detects your pose · Get real-time corrections
-              </Text>
-              <Text style={styles.poseCoachSub}>
-                Experience: {profile?.experience || 'beginner'} mode active
-              </Text>
+          <LinearGradient
+            colors={gradients.hero}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.poseCoachBanner}
+          >
+            <View style={styles.poseCoachLeft}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveLabel}>LIVE</Text>
             </View>
-          </View>
-          <Text style={styles.poseCoachArrow}>→</Text>
+            <View style={styles.poseCoachCenter}>
+              <View style={styles.poseCoachIconBox}>
+                <Ionicons name="camera" size={22} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.poseCoachTitle}>Live Mobile Pose Corrector</Text>
+                <Text style={styles.poseCoachDesc}>
+                  Open camera · AI detects your pose · Get real-time corrections
+                </Text>
+                <Text style={styles.poseCoachSub}>
+                  Experience: {profile?.experience || 'beginner'} mode active
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* ── Quick Actions Row ── */}
@@ -115,7 +128,7 @@ const HomeScreen = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#FF8A6518' }]}>
-              <Text style={styles.actionEmoji}>☀️</Text>
+              <Ionicons name="sunny" size={20} color="#FF8A65" />
             </View>
             <Text style={styles.actionTitle}>Surya Namaskar</Text>
             <Text style={styles.actionDesc}>Sun Salutation</Text>
@@ -127,7 +140,7 @@ const HomeScreen = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#4DB6AC18' }]}>
-              <Text style={styles.actionEmoji}>📋</Text>
+              <Ionicons name="list-outline" size={20} color="#4DB6AC" />
             </View>
             <Text style={styles.actionTitle}>My Custom Sets</Text>
             <Text style={styles.actionDesc}>Build routines</Text>
@@ -139,7 +152,7 @@ const HomeScreen = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#7986CB18' }]}>
-              <Text style={styles.actionEmoji}>🩺</Text>
+              <MaterialCommunityIcons name="stethoscope" size={20} color="#7986CB" />
             </View>
             <Text style={styles.actionTitle}>Health Scanner</Text>
             <Text style={styles.actionDesc}>Find by problem</Text>
@@ -151,7 +164,7 @@ const HomeScreen = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#FFB74D18' }]}>
-              <Text style={styles.actionEmoji}>📊</Text>
+              <Ionicons name="stats-chart-outline" size={20} color="#FFB74D" />
             </View>
             <Text style={styles.actionTitle}>My Progress</Text>
             <Text style={styles.actionDesc}>
@@ -164,7 +177,10 @@ const HomeScreen = ({ navigation }) => {
         {favorites.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Your Favorites ❤️</Text>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="heart" size={13} color={colors.error} />
+                <Text style={styles.sectionTitle}>Your Favorites</Text>
+              </View>
             </View>
             <ScrollView
               horizontal
@@ -239,30 +255,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card, justifyContent: 'center', alignItems: 'center',
     ...shadows.card, borderWidth: 1, borderColor: colors.borderLight,
   },
-  profileBtnText: { fontSize: 20 },
   headerBadge: {
     marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  streakChip: {
-    backgroundColor: colors.intermediateBg,
-    borderRadius: borderRadius.round,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  streakChipText: {
-    ...typography.caption,
-    color: colors.warning,
-    fontWeight: '700',
-  },
 
   /* Live Pose Corrector Banner */
   poseCoachBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primaryDark,
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     borderRadius: borderRadius.xl,
@@ -291,8 +294,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  poseCoachEmoji: {
-    fontSize: 30,
+  poseCoachIconBox: {
+    width: 44, height: 44, borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    justifyContent: 'center', alignItems: 'center',
     marginRight: spacing.sm,
   },
   poseCoachTitle: {
@@ -313,17 +318,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 10,
   },
-  poseCoachArrow: {
-    fontSize: 22,
-    color: colors.textWhite,
-    fontWeight: '700',
-    marginLeft: spacing.sm,
-  },
 
   /* Section Header */
   sectionHeader: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   sectionTitle: {
     ...typography.label,

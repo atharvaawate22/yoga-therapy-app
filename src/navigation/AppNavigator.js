@@ -2,9 +2,10 @@
  * AppNavigator - Bottom tabs (Home / Progress / Settings) inside a native stack
  */
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, View, Text } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '../theme/theme';
 import { isOnboarded } from '../data/userStorage';
 
@@ -32,10 +33,6 @@ const defaultScreenOptions = {
   animation: 'slide_from_right',
 };
 
-const TabIcon = ({ emoji, focused }) => (
-  <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
-);
-
 const MainTabs = () => (
   <Tab.Navigator
     screenOptions={{
@@ -45,6 +42,9 @@ const MainTabs = () => (
       tabBarStyle: {
         backgroundColor: colors.card,
         borderTopColor: colors.borderLight,
+        height: 58,
+        paddingBottom: 6,
+        paddingTop: 6,
       },
       tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
     }}
@@ -52,20 +52,30 @@ const MainTabs = () => (
     <Tab.Screen
       name="Home"
       component={HomeScreen}
-      options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} /> }}
+      options={{
+        tabBarIcon: ({ focused, color }) => (
+          <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+        ),
+      }}
     />
     <Tab.Screen
       name="History"
       component={HistoryScreen}
       options={{
         title: 'Progress',
-        tabBarIcon: ({ focused }) => <TabIcon emoji="📊" focused={focused} />,
+        tabBarIcon: ({ focused, color }) => (
+          <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={21} color={color} />
+        ),
       }}
     />
     <Tab.Screen
       name="Settings"
       component={SettingsScreen}
-      options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} /> }}
+      options={{
+        tabBarIcon: ({ focused, color }) => (
+          <Ionicons name={focused ? 'settings' : 'settings-outline'} size={21} color={color} />
+        ),
+      }}
     />
   </Tab.Navigator>
 );

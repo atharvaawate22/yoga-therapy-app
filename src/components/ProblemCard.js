@@ -4,34 +4,42 @@
  */
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme/theme';
 
+// { family: 'ion' | 'mci', name }
 const problemIcons = {
-  "Back Pain": "🦴",
-  "Hip Alignment Issue": "🏃",
-  "Scapula Winging": "💪",
-  "Headache": "🧠",
-  "Stress": "😌",
-  "Anxiety": "🌿",
-  "Poor Posture": "🧘",
-  "Insomnia": "😴",
-  "Knee Pain": "🦵",
-  "Digestion Issues": "🫁",
-  "Weight Loss": "🔥",
-  "Neck Pain": "🦒",
-  "Shoulder Pain": "💆",
-  "Diabetes": "💉",
-  "PCOS": "🩺",
-  "Flexibility": "🤸",
+  'Back Pain': { family: 'mci', name: 'human-handsdown' },
+  'Hip Alignment Issue': { family: 'ion', name: 'walk-outline' },
+  'Scapula Winging': { family: 'mci', name: 'arm-flex-outline' },
+  'Headache': { family: 'mci', name: 'head-alert' },
+  'Stress': { family: 'mci', name: 'emoticon-neutral-outline' },
+  'Anxiety': { family: 'mci', name: 'leaf' },
+  'Poor Posture': { family: 'mci', name: 'human-male-height' },
+  'Insomnia': { family: 'mci', name: 'sleep' },
+  'Knee Pain': { family: 'mci', name: 'shoe-print' },
+  'Digestion Issues': { family: 'mci', name: 'stomach' },
+  'Weight Loss': { family: 'ion', name: 'flame' },
+  'Neck Pain': { family: 'mci', name: 'head-outline' },
+  'Shoulder Pain': { family: 'mci', name: 'human-handsup' },
+  'Diabetes': { family: 'mci', name: 'diabetes' },
+  'PCOS': { family: 'mci', name: 'human-female' },
+  'Flexibility': { family: 'mci', name: 'yoga' },
+};
+
+const ProblemIcon = ({ problemName, size, color }) => {
+  const icon = problemIcons[problemName] || { family: 'mci', name: 'yoga' };
+  if (icon.family === 'ion') {
+    return <Ionicons name={icon.name} size={size} color={color} />;
+  }
+  return <MaterialCommunityIcons name={icon.name} size={size} color={color} />;
 };
 
 const ProblemCard = ({ problemName, poseCount, onPress }) => {
-  const icon = problemIcons[problemName] || "🧘";
-
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.iconContainer}>
-        <Text style={styles.icon}>{icon}</Text>
+        <ProblemIcon problemName={problemName} size={26} color={colors.primary} />
       </View>
       <View style={styles.content}>
         <Text style={styles.problemName}>{problemName}</Text>
@@ -40,7 +48,7 @@ const ProblemCard = ({ problemName, poseCount, onPress }) => {
         </Text>
       </View>
       <View style={styles.arrowContainer}>
-        <Text style={styles.arrow}>→</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textWhite} />
       </View>
     </TouchableOpacity>
   );
@@ -68,9 +76,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  icon: {
-    fontSize: 26,
-  },
   content: {
     flex: 1,
   },
@@ -92,11 +97,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  arrow: {
-    fontSize: 16,
-    color: colors.textWhite,
-    fontWeight: 'bold',
   },
 });
 

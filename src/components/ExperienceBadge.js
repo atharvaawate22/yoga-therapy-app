@@ -3,20 +3,21 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing } from '../theme/theme';
 
 const levelConfig = {
-  beginner: { label: 'Beginner', color: colors.beginner, bg: colors.beginnerBg },
-  intermediate: { label: 'Intermediate', color: colors.intermediate, bg: colors.intermediateBg },
-  expert: { label: 'Expert', color: colors.expert, bg: colors.expertBg },
-  advanced: { label: 'Advanced', color: colors.expert, bg: colors.expertBg },
+  beginner: { label: 'Beginner', color: colors.beginner, bg: colors.beginnerBg, icon: 'leaf' },
+  intermediate: { label: 'Intermediate', color: colors.intermediate, bg: colors.intermediateBg, icon: 'flame' },
+  expert: { label: 'Expert', color: colors.expert, bg: colors.expertBg, icon: 'trophy' },
+  advanced: { label: 'Advanced', color: colors.expert, bg: colors.expertBg, icon: 'trophy' },
 };
 
 const ExperienceBadge = ({ level = 'beginner', small = false }) => {
   const config = levelConfig[level] || levelConfig.beginner;
   return (
     <View style={[styles.badge, { backgroundColor: config.bg }, small && styles.badgeSmall]}>
-      <View style={[styles.dot, { backgroundColor: config.color }]} />
+      <Ionicons name={config.icon} size={small ? 10 : 12} color={config.color} style={styles.icon} />
       <Text style={[styles.label, { color: config.color }, small && styles.labelSmall]}>
         {config.label}
       </Text>
@@ -37,11 +38,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 6,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
+  icon: {
+    marginRight: 4,
   },
   label: {
     fontSize: 11,

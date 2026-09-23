@@ -159,6 +159,14 @@ export const screenStyles = {
   },
 };
 
+export const gradients = {
+  hero: ['#1B5E20', '#2E7D32', '#43A047'],
+  heroDiagonal: { colors: ['#1B5E20', '#2E7D32', '#43A047'], start: { x: 0, y: 0 }, end: { x: 1, y: 1 } },
+  streak: ['#FF8A65', '#FB8C00'],
+  card: ['#FFFFFF', '#F1F8E9'],
+  overlay: ['transparent', 'rgba(10,20,10,0.55)'],
+};
+
 const theme = {
   colors,
   typography,
@@ -167,6 +175,7 @@ const theme = {
   shadows,
   cardStyles,
   screenStyles,
+  gradients,
 };
 
 export default theme;

@@ -5,15 +5,18 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import { getPracticeSessions, getPracticeStats, groupSessionsByDay, formatDuration } from '../data/sessionStorage';
+import WeeklyStreakStrip from '../components/WeeklyStreakStrip';
 
 const TYPE_META = {
-  routine: { emoji: '🧘', label: 'Routine' },
-  custom: { emoji: '📋', label: 'Custom set' },
-  single: { emoji: '🎯', label: 'Single pose' },
-  surya: { emoji: '☀️', label: 'Surya Namaskar' },
-  corrector: { emoji: '📸', label: 'Pose corrector' },
+  routine: { icon: 'body-outline', label: 'Routine' },
+  custom: { icon: 'list-outline', label: 'Custom set' },
+  single: { icon: 'radio-button-on-outline', label: 'Single pose' },
+  surya: { icon: 'sunny', label: 'Surya Namaskar' },
+  corrector: { icon: 'camera', label: 'Pose corrector' },
 };
 
 const BAR_MAX_HEIGHT = 72;
@@ -48,21 +51,24 @@ const HistoryScreen = ({ navigation }) => {
         {/* Stat tiles */}
         <View style={styles.statsRow}>
           <View style={styles.statTile}>
-            <Text style={styles.statEmoji}>🔥</Text>
+            <Ionicons name="flame" size={18} color={colors.warning} />
             <Text style={styles.statValue}>{stats.currentStreakDays}</Text>
             <Text style={styles.statLabel}>Day streak</Text>
           </View>
           <View style={styles.statTile}>
-            <Text style={styles.statEmoji}>⏱️</Text>
+            <Ionicons name="time-outline" size={18} color={colors.info} />
             <Text style={styles.statValue}>{stats.weekMinutes}</Text>
             <Text style={styles.statLabel}>Min this week</Text>
           </View>
           <View style={styles.statTile}>
-            <Text style={styles.statEmoji}>✅</Text>
+            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
             <Text style={styles.statValue}>{stats.totalSessions}</Text>
             <Text style={styles.statLabel}>Sessions</Text>
           </View>
         </View>
+
+        {/* Weekly streak strip */}
+        <WeeklyStreakStrip last7Days={stats.last7Days} currentStreakDays={stats.currentStreakDays} />
 
         {/* 7-day activity */}
         <View style={styles.activityCard}>
@@ -80,7 +86,14 @@ const HistoryScreen = ({ navigation }) => {
                       <Text style={styles.barValue}>{day.minutes}</Text>
                     )}
                     {day.minutes > 0
-                      ? <View style={[styles.bar, { height }]} />
+                      ? (
+                        <LinearGradient
+                          colors={isToday ? gradients.streak : [colors.primaryLight, colors.primary]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={[styles.bar, { height }]}
+                        />
+                      )
                       : <View style={styles.barEmptyDot} />}
                   </View>
                   <Text style={[styles.barLabel, isToday && styles.barLabelToday]}>
@@ -95,7 +108,9 @@ const HistoryScreen = ({ navigation }) => {
         {/* Session log */}
         {isEmpty ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🧘‍♀️</Text>
+            <View style={styles.emptyIconBox}>
+              <Ionicons name="body-outline" size={36} color={colors.primary} />
+            </View>
             <Text style={styles.emptyTitle}>No sessions yet</Text>
             <Text style={styles.emptyText}>
               Complete a timed practice, a custom set, or Surya Namaskar and it will show up here.
@@ -105,7 +120,8 @@ const HistoryScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('Home')}
               activeOpacity={0.85}
             >
-              <Text style={styles.emptyBtnText}>Start Practicing →</Text>
+              <Text style={styles.emptyBtnText}>Start Practicing</Text>
+              <Ionicons name="arrow-forward" size={16} color={colors.textWhite} />
             </TouchableOpacity>
           </View>
         ) : (
@@ -120,7 +136,7 @@ const HistoryScreen = ({ navigation }) => {
                 return (
                   <View key={session.id} style={styles.sessionRow}>
                     <View style={styles.sessionIconBox}>
-                      <Text style={styles.sessionEmoji}>{meta.emoji}</Text>
+                      <Ionicons name={meta.icon} size={18} color={colors.primary} />
                     </View>
                     <View style={styles.sessionInfo}>
                       <Text style={styles.sessionTitle}>{session.title}</Text>
@@ -157,8 +173,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md, alignItems: 'center',
     ...shadows.card, borderWidth: 1, borderColor: colors.borderLight,
   },
-  statEmoji: { fontSize: 18, marginBottom: 4 },
-  statValue: { ...typography.headerMedium, color: colors.text },
+  statValue: { ...typography.headerMedium, color: colors.text, marginTop: 4 },
   statLabel: { ...typography.caption, color: colors.textMuted, marginTop: 2, fontSize: 11 },
 
   /* Activity bars */
@@ -175,7 +190,7 @@ const styles = StyleSheet.create({
   },
   barValue: { ...typography.caption, color: colors.text, fontWeight: '700', marginBottom: 3 },
   bar: {
-    width: 14, backgroundColor: colors.primary,
+    width: 14,
     borderTopLeftRadius: 4, borderTopRightRadius: 4,
   },
   barEmptyDot: { width: 14, height: 3, borderRadius: 2, backgroundColor: colors.border },
@@ -193,7 +208,6 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: borderRadius.sm, backgroundColor: colors.cardAlt,
     justifyContent: 'center', alignItems: 'center', marginRight: spacing.sm,
   },
-  sessionEmoji: { fontSize: 18 },
   sessionInfo: { flex: 1 },
   sessionTitle: { ...typography.bodySmall, fontWeight: '600', color: colors.text },
   sessionMeta: { ...typography.caption, color: colors.textMuted, marginTop: 1 },
@@ -203,10 +217,14 @@ const styles = StyleSheet.create({
 
   /* Empty state */
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.lg },
-  emptyEmoji: { fontSize: 44, marginBottom: spacing.sm },
+  emptyIconBox: {
+    width: 72, height: 72, borderRadius: 36, backgroundColor: colors.backgroundDark,
+    justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md,
+  },
   emptyTitle: { ...typography.headerSmall, color: colors.text, marginBottom: spacing.xs },
   emptyText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
   emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: colors.primary, borderRadius: borderRadius.xl,
     paddingVertical: 12, paddingHorizontal: spacing.lg, marginTop: spacing.md, ...shadows.prominent,
   },
