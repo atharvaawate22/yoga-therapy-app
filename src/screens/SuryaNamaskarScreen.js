@@ -4,13 +4,31 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import suryaNamaskarSteps from '../data/suryaNamaskarData';
 import RoundSelector from '../components/RoundSelector';
 import { resolveImageSource } from '../utils/imageUtils';
+import { hasRealPoseImage, POSE_ICON_FALLBACK } from '../data/poseImages';
 import { savePracticeSession, formatDuration } from '../data/sessionStorage';
+
+// Small thumbnail for the preview list -- a photo when one genuinely
+// matches the pose, otherwise a themed icon rather than an unrelated stock
+// photo passed off as the real thing.
+const PoseThumb = ({ poseId, source, iconSize, style }) => {
+  if (hasRealPoseImage(poseId)) {
+    return <Image source={source} style={style} />;
+  }
+  const icon = POSE_ICON_FALLBACK[poseId] || { family: 'mci', name: 'yoga' };
+  return (
+    <View style={[style, { backgroundColor: colors.cardAlt, justifyContent: 'center', alignItems: 'center' }]}>
+      {icon.family === 'ion'
+        ? <Ionicons name={icon.name} size={iconSize} color={colors.primary} />
+        : <MaterialCommunityIcons name={icon.name} size={iconSize} color={colors.primary} />}
+    </View>
+  );
+};
 
 const SuryaNamaskarScreen = ({ navigation }) => {
   const [rounds, setRounds] = useState(3);
@@ -103,7 +121,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
                   <View style={styles.stepBadge}>
                     <Text style={styles.stepBadgeText}>{s.step}</Text>
                   </View>
-                  <Image source={sImg} style={styles.previewThumb} />
+                  <PoseThumb poseId={s.imageId} source={sImg} iconSize={22} style={styles.previewThumb} />
                   <View style={styles.previewInfo}>
                     <Text style={styles.previewName}>{s.name}</Text>
                     <Text style={styles.previewSanskrit}>{s.sanskritName}</Text>
@@ -136,7 +154,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
         </Text>
 
         {/* Step Image */}
-        <Image source={imgSrc} style={styles.stepImage} resizeMode="cover" />
+        <PoseThumb poseId={step.imageId} source={imgSrc} iconSize={72} style={styles.stepImage} />
 
         {/* Step Info */}
         <View style={styles.stepInfo}>

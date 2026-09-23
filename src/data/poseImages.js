@@ -14,6 +14,23 @@ const localImages = {
   cobra_pose:        require('../../assets/poses/cobra_pose.png'),
   tree_pose:         require('../../assets/poses/tree_pose.png'),
   warrior_pose:      require('../../assets/poses/warrior_pose.png'),
+  // Ashwa Sanchalanasana (Equestrian Pose, Surya Namaskar steps 4 & 9) is
+  // visually the same lunge shape as Anjaneyasana -- reuse that photo
+  // rather than falling through to an unrelated generic stock image.
+  equestrian_pose:   require('../../assets/poses/low_lunge.png'),
+};
+
+/**
+ * Surya-Namaskar-only steps with no matching photo (and no visually close
+ * enough local/remote one to reuse honestly). Rather than show an unrelated
+ * stock photo as if it depicted the pose, the screen renders this icon
+ * instead -- see hasRealPoseImage() / POSE_ICON_FALLBACK below.
+ */
+export const POSE_ICON_FALLBACK = {
+  prayer_pose: { family: 'mci', name: 'hands-pray' },
+  raised_arms: { family: 'mci', name: 'human-handsup' },
+  plank_pose: { family: 'mci', name: 'yoga' },
+  eight_limbed: { family: 'mci', name: 'human-handsdown' },
 };
 
 /**
@@ -73,5 +90,9 @@ export const getPoseImage = (poseId) => {
   if (remoteImages[poseId]) return { uri: remoteImages[poseId] };
   return { uri: FALLBACK };
 };
+
+/** Whether poseId has a real, pose-specific photo (vs. the generic fallback). */
+export const hasRealPoseImage = (poseId) =>
+  Boolean(localImages[poseId] || remoteImages[poseId]);
 
 export default getPoseImage;
