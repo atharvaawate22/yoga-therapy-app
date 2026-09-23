@@ -4,7 +4,9 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography, spacing, screenStyles, borderRadius, shadows } from '../theme/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, screenStyles, borderRadius, shadows, gradients } from '../theme/theme';
 import PoseCard from '../components/PoseCard';
 import proTips from '../data/proTips';
 
@@ -33,27 +35,35 @@ const PoseScreen = ({ route, navigation }) => {
 
         {/* Start Timed Practice */}
         <TouchableOpacity
-          style={styles.startPracticeBtn}
           onPress={() => navigation.navigate('PracticeSession', {
             title: problemName,
             poses,
             sourceType: 'routine',
           })}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
         >
-          <Text style={styles.startPracticeEmoji}>▶️</Text>
-          <View style={styles.startPracticeContent}>
-            <Text style={styles.startPracticeTitle}>Start Guided Practice</Text>
-            <Text style={styles.startPracticeDesc}>
-              Timed play-through of all {poses.length} poses with voice cues
-            </Text>
-          </View>
-          <Text style={styles.startPracticeArrow}>→</Text>
+          <LinearGradient
+            colors={gradients.hero}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.startPracticeBtn}
+          >
+            <View style={styles.startPracticeIconBox}>
+              <Ionicons name="play" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.startPracticeContent}>
+              <Text style={styles.startPracticeTitle}>Start Guided Practice</Text>
+              <Text style={styles.startPracticeDesc}>
+                Timed play-through of all {poses.length} poses with voice cues
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* Info Card */}
         <View style={styles.infoCard}>
-          <Text style={styles.infoIcon}>💡</Text>
+          <Ionicons name="bulb-outline" size={20} color={colors.accent} style={styles.infoIcon} />
           <Text style={styles.infoText}>
             Tap any pose to see step-by-step image instructions and benefits.
           </Text>
@@ -76,7 +86,10 @@ const PoseScreen = ({ route, navigation }) => {
 
         {/* Condition-specific Pro Tips */}
         <View style={styles.tipCard}>
-          <Text style={styles.tipTitle}>🌟 Pro Tips for {problemName}</Text>
+          <View style={styles.tipTitleRow}>
+            <Ionicons name="sparkles" size={16} color={colors.primary} />
+            <Text style={styles.tipTitle}>Pro Tips for {problemName}</Text>
+          </View>
           {tips.map((tip, i) => (
             <View key={i} style={styles.tipRow}>
               <Text style={styles.tipBullet}>•</Text>
@@ -87,8 +100,9 @@ const PoseScreen = ({ route, navigation }) => {
 
         {/* Warning */}
         <View style={styles.warningCard}>
+          <Ionicons name="medical-outline" size={16} color={colors.warning} style={styles.warningIcon} />
           <Text style={styles.warningText}>
-            ⚕️ These poses are for general wellness. Consult a doctor or certified yoga therapist for medical conditions.
+            These poses are for general wellness. Consult a doctor or certified yoga therapist for medical conditions.
           </Text>
         </View>
 
@@ -125,18 +139,20 @@ const styles = StyleSheet.create({
   startPracticeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.xl,
     ...shadows.prominent,
   },
-  startPracticeEmoji: { fontSize: 24, marginRight: spacing.md },
+  startPracticeIconBox: {
+    width: 40, height: 40, borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    justifyContent: 'center', alignItems: 'center', marginRight: spacing.md,
+  },
   startPracticeContent: { flex: 1 },
   startPracticeTitle: { ...typography.headerSmall, color: colors.textWhite, fontSize: 16 },
   startPracticeDesc: { ...typography.caption, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  startPracticeArrow: { fontSize: 20, color: colors.textWhite, fontWeight: '700' },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -149,7 +165,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.accent,
     ...shadows.soft,
   },
-  infoIcon: { fontSize: 22, marginRight: spacing.md },
+  infoIcon: { marginRight: spacing.md },
   infoText: { ...typography.bodySmall, color: colors.textLight, flex: 1, lineHeight: 20 },
   posesList: { paddingTop: spacing.sm },
   poseNumberRow: {
@@ -177,10 +193,15 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: colors.primaryLight,
   },
+  tipTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
+  },
   tipTitle: {
     ...typography.headerSmall,
     color: colors.primary,
-    marginBottom: spacing.md,
     fontSize: 16,
   },
   tipRow: {
@@ -202,6 +223,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   warningCard: {
+    flexDirection: 'row',
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
     marginBottom: spacing.lg,
@@ -211,10 +233,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: colors.warning,
   },
+  warningIcon: { marginRight: spacing.sm, marginTop: 1 },
   warningText: {
     ...typography.bodySmall,
     color: '#795548',
     lineHeight: 20,
+    flex: 1,
   },
 });
 

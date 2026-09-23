@@ -6,6 +6,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import { getAllPoses } from '../data/yogaData';
 import { getCustomSets, saveCustomSet, deleteCustomSet, updateCustomSet } from '../data/userStorage';
@@ -134,14 +135,14 @@ const CustomSetScreen = ({ navigation }) => {
                       onPress={() => movePose(index, -1)}
                       disabled={index === 0}
                     >
-                      <Text style={styles.orderBtnText}>↑</Text>
+                      <Ionicons name="arrow-up" size={15} color={index === 0 ? colors.textMuted : colors.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.orderBtn, index === selectedPoses.length - 1 && styles.orderBtnDisabled]}
                       onPress={() => movePose(index, 1)}
                       disabled={index === selectedPoses.length - 1}
                     >
-                      <Text style={styles.orderBtnText}>↓</Text>
+                      <Ionicons name="arrow-down" size={15} color={index === selectedPoses.length - 1 ? colors.textMuted : colors.primary} />
                     </TouchableOpacity>
                   </View>
                 );
@@ -168,7 +169,7 @@ const CustomSetScreen = ({ navigation }) => {
                   <ExperienceBadge level={pose.difficulty} small />
                 </View>
                 <View style={[styles.checkbox, selected && styles.checkboxActive]}>
-                  {selected && <Text style={styles.check}>✓</Text>}
+                  {selected && <Ionicons name="checkmark" size={14} color={colors.textWhite} />}
                 </View>
               </TouchableOpacity>
             );
@@ -194,13 +195,13 @@ const CustomSetScreen = ({ navigation }) => {
         <Text style={styles.subtitle}>Create your own yoga routines</Text>
 
         <TouchableOpacity style={styles.createBtn} onPress={startCreate} activeOpacity={0.85}>
-          <Text style={styles.createBtnIcon}>＋</Text>
+          <Ionicons name="add" size={20} color={colors.textWhite} style={styles.createBtnIcon} />
           <Text style={styles.createBtnText}>Create New Set</Text>
         </TouchableOpacity>
 
         {sets.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>📋</Text>
+            <Ionicons name="clipboard-outline" size={44} color={colors.textMuted} />
             <Text style={styles.emptyText}>No custom sets yet.{'\n'}Tap above to create one!</Text>
           </View>
         ) : (
@@ -211,13 +212,13 @@ const CustomSetScreen = ({ navigation }) => {
                 <Text style={styles.setMeta}>{set.poses?.length || 0} poses · tap to view</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.playBtn} onPress={() => handlePlaySet(set)} activeOpacity={0.8}>
-                <Text style={styles.playBtnText}>▶</Text>
+                <Ionicons name="play" size={15} color={colors.textWhite} style={{ marginLeft: 2 }} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.editBtn} onPress={() => startEdit(set)}>
-                <Text style={styles.editBtnText}>✏️</Text>
+                <Ionicons name="create-outline" size={19} color={colors.textLight} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(set.id, set.name)}>
-                <Text style={styles.deleteBtnText}>🗑️</Text>
+                <Ionicons name="trash-outline" size={19} color={colors.error} />
               </TouchableOpacity>
             </View>
           ))
@@ -252,7 +253,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border, justifyContent: 'center', alignItems: 'center',
   },
   checkboxActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  check: { color: colors.textWhite, fontSize: 14, fontWeight: '800' },
   btnRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   cancelBtn: {
     flex: 1, paddingVertical: 14, borderRadius: borderRadius.lg,
@@ -269,10 +269,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: borderRadius.xl,
     paddingVertical: 14, marginBottom: spacing.lg, ...shadows.prominent,
   },
-  createBtnIcon: { fontSize: 20, color: colors.textWhite, marginRight: spacing.sm },
+  createBtnIcon: { marginRight: spacing.sm },
   createBtnText: { ...typography.headerSmall, color: colors.textWhite, fontSize: 15 },
-  emptyState: { alignItems: 'center', paddingVertical: spacing.xxl },
-  emptyEmoji: { fontSize: 48, marginBottom: spacing.md },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.xxl, gap: spacing.md },
   emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center', lineHeight: 24 },
   setCard: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,
@@ -287,11 +286,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginRight: spacing.xs,
     ...shadows.soft,
   },
-  playBtnText: { color: colors.textWhite, fontSize: 14, fontWeight: '800', marginLeft: 2 },
   editBtn: { padding: spacing.sm },
-  editBtnText: { fontSize: 16 },
   deleteBtn: { padding: spacing.sm },
-  deleteBtnText: { fontSize: 18 },
 
   /* Reorder rows */
   orderRow: {
@@ -310,7 +306,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   orderBtnDisabled: { opacity: 0.3 },
-  orderBtnText: { fontSize: 15, fontWeight: '700', color: colors.primary },
 });
 
 export default CustomSetScreen;

@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import yogaData from '../data/yogaData';
 import { getUserProfile } from '../data/userStorage';
@@ -52,7 +53,7 @@ const HealthScanScreen = ({ navigation }) => {
 
         {/* Search */}
         <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search health conditions..."
@@ -62,7 +63,7 @@ const HealthScanScreen = ({ navigation }) => {
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Text style={styles.clearBtn}>✕</Text>
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -81,7 +82,7 @@ const HealthScanScreen = ({ navigation }) => {
             ))}
             {filtered.length === 0 && (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyEmoji}>🤷</Text>
+                <Ionicons name="sad-outline" size={40} color={colors.textMuted} />
                 <Text style={styles.emptyText}>No matching conditions found.{'\n'}Try a different search term.</Text>
               </View>
             )}
@@ -105,7 +106,7 @@ const HealthScanScreen = ({ navigation }) => {
 
         {/* Info Card */}
         <View style={styles.infoCard}>
-          <Text style={styles.infoIcon}>💡</Text>
+          <Ionicons name="bulb-outline" size={18} color={colors.accent} style={styles.infoIcon} />
           <Text style={styles.infoText}>
             Poses are filtered based on your experience level ({profile?.experience || 'beginner'}).
             Update your profile to see different recommendations.
@@ -126,23 +127,21 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl, paddingHorizontal: spacing.md, paddingVertical: 4,
     marginBottom: spacing.lg, ...shadows.card, borderWidth: 1, borderColor: colors.borderLight,
   },
-  searchIcon: { fontSize: 16, marginRight: spacing.sm },
+  searchIcon: { marginRight: spacing.sm },
   searchInput: { flex: 1, ...typography.body, color: colors.text, paddingVertical: 10 },
-  clearBtn: { fontSize: 16, color: colors.textMuted, padding: spacing.sm },
   resultCount: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
   categoryLabel: {
     ...typography.label, color: colors.primary, marginTop: spacing.lg,
     marginBottom: spacing.sm, marginLeft: spacing.md,
   },
-  emptyState: { alignItems: 'center', paddingVertical: spacing.xxl },
-  emptyEmoji: { fontSize: 40, marginBottom: spacing.sm },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.xxl, gap: spacing.sm },
   emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   infoCard: {
     flexDirection: 'row', alignItems: 'flex-start', backgroundColor: colors.cardAlt,
     borderRadius: borderRadius.lg, padding: spacing.md, marginTop: spacing.lg,
     borderLeftWidth: 3, borderLeftColor: colors.accent,
   },
-  infoIcon: { fontSize: 18, marginRight: spacing.sm, marginTop: 2 },
+  infoIcon: { marginRight: spacing.sm, marginTop: 2 },
   infoText: { ...typography.bodySmall, color: colors.textLight, flex: 1, lineHeight: 20 },
 });
 

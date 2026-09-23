@@ -6,14 +6,17 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import { setUserProfile, setOnboarded } from '../data/userStorage';
 import { REMINDER_OPTIONS, getReminderSetting, applyReminderSetting } from '../utils/reminders';
 
+// Same icon language as ExperienceBadge, for consistency across the app.
 const experienceLevels = [
-  { key: 'beginner', label: 'Beginner', emoji: '🌱', desc: 'New to yoga, gentle corrections' },
-  { key: 'intermediate', label: 'Intermediate', emoji: '🌿', desc: '1-2 years experience, balanced feedback' },
-  { key: 'expert', label: 'Expert', emoji: '🌳', desc: '3+ years, strict & precise corrections' },
+  { key: 'beginner', label: 'Beginner', icon: 'leaf', desc: 'New to yoga, gentle corrections' },
+  { key: 'intermediate', label: 'Intermediate', icon: 'flame', desc: '1-2 years experience, balanced feedback' },
+  { key: 'expert', label: 'Expert', icon: 'trophy', desc: '3+ years, strict & precise corrections' },
 ];
 
 const ageRanges = [
@@ -59,7 +62,9 @@ const ProfileSetupScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.emoji}>🧘‍♀️</Text>
+            <LinearGradient colors={gradients.hero} style={styles.headerIconBox}>
+              <Ionicons name="body" size={34} color="#FFFFFF" />
+            </LinearGradient>
             <Text style={styles.title}>Welcome to{'\n'}Yoga Therapy</Text>
             <Text style={styles.subtitle}>
               Let's personalize your experience for better yoga guidance.
@@ -107,7 +112,13 @@ const ProfileSetupScreen = ({ navigation }) => {
                 onPress={() => setExperience(lvl.key)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.levelEmoji}>{lvl.emoji}</Text>
+                <View style={[styles.levelIconBox, experience === lvl.key && styles.levelIconBoxActive]}>
+                  <Ionicons
+                    name={lvl.icon}
+                    size={20}
+                    color={experience === lvl.key ? colors.textWhite : colors.primary}
+                  />
+                </View>
                 <View style={styles.levelContent}>
                   <Text style={[styles.levelTitle, experience === lvl.key && styles.levelTitleActive]}>
                     {lvl.label}
@@ -145,7 +156,8 @@ const ProfileSetupScreen = ({ navigation }) => {
 
           {/* Continue Button */}
           <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} activeOpacity={0.85}>
-            <Text style={styles.continueBtnText}>Start My Journey →</Text>
+            <Text style={styles.continueBtnText}>Start My Journey</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textWhite} />
           </TouchableOpacity>
 
           <Text style={styles.skip} onPress={handleContinue}>
@@ -161,7 +173,11 @@ const styles = StyleSheet.create({
   container: { ...screenStyles.container },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', marginBottom: spacing.xl },
-  emoji: { fontSize: 56, marginBottom: spacing.md },
+  headerIconBox: {
+    width: 76, height: 76, borderRadius: 38,
+    justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md,
+    ...shadows.prominent,
+  },
   title: {
     ...typography.headerLarge,
     textAlign: 'center',
@@ -225,7 +241,12 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: '#F0F9F0',
   },
-  levelEmoji: { fontSize: 28, marginRight: spacing.md },
+  levelIconBox: {
+    width: 40, height: 40, borderRadius: borderRadius.md,
+    backgroundColor: colors.cardAlt,
+    justifyContent: 'center', alignItems: 'center', marginRight: spacing.md,
+  },
+  levelIconBoxActive: { backgroundColor: colors.primary },
   levelContent: { flex: 1 },
   levelTitle: { ...typography.headerSmall, fontSize: 16, color: colors.text },
   levelTitleActive: { color: colors.primary },
@@ -247,6 +268,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   continueBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.xl,
     paddingVertical: 16,

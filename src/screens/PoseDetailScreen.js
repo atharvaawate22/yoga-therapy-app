@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import ExperienceBadge from '../components/ExperienceBadge';
 import { resolveImageSource } from '../utils/imageUtils';
@@ -38,7 +39,7 @@ const PoseDetailScreen = ({ route, navigation }) => {
             activeOpacity={0.8}
             accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <Text style={styles.favoriteBtnText}>{isFavorite ? '❤️' : '🤍'}</Text>
+            <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={22} color={isFavorite ? colors.error : colors.textLight} />
           </TouchableOpacity>
           <View style={styles.heroContent}>
             <ExperienceBadge level={difficulty || 'beginner'} />
@@ -51,13 +52,13 @@ const PoseDetailScreen = ({ route, navigation }) => {
           {/* Duration & Difficulty Row */}
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>⏱️</Text>
+              <Ionicons name="timer-outline" size={20} color={colors.primary} style={styles.metaIcon} />
               <Text style={styles.metaLabel}>Duration</Text>
               <Text style={styles.metaValue}>{duration}</Text>
             </View>
             <View style={styles.metaDivider} />
             <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>📊</Text>
+              <Ionicons name="stats-chart-outline" size={20} color={colors.primary} style={styles.metaIcon} />
               <Text style={styles.metaLabel}>Level</Text>
               <Text style={styles.metaValue}>{(difficulty || 'beginner').charAt(0).toUpperCase() + (difficulty || 'beginner').slice(1)}</Text>
             </View>
@@ -65,14 +66,20 @@ const PoseDetailScreen = ({ route, navigation }) => {
 
           {/* Description */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>About This Pose</Text>
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="information-circle-outline" size={17} color={colors.primary} />
+              <Text style={styles.cardTitle}>About This Pose</Text>
+            </View>
             <Text style={styles.cardBody}>{description}</Text>
           </View>
 
           {/* Step-by-Step Instructions */}
           {steps && steps.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🪜 How To Do It</Text>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="footsteps-outline" size={17} color={colors.primary} />
+                <Text style={styles.cardTitle}>How To Do It</Text>
+              </View>
               {steps.map((step, i) => (
                 <View key={i} style={styles.stepRow}>
                   <View style={styles.stepNumber}>
@@ -87,7 +94,10 @@ const PoseDetailScreen = ({ route, navigation }) => {
           {/* Benefits */}
           {benefits && benefits.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>✨ Benefits</Text>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="sparkles" size={16} color={colors.primary} />
+                <Text style={styles.cardTitle}>Benefits</Text>
+              </View>
               {benefits.map((b, i) => (
                 <View key={i} style={styles.bulletRow}>
                   <Text style={styles.bulletDot}>•</Text>
@@ -100,7 +110,10 @@ const PoseDetailScreen = ({ route, navigation }) => {
           {/* Precautions */}
           {precautions && precautions.length > 0 && (
             <View style={[styles.card, styles.cautionCard]}>
-              <Text style={styles.cardTitle}>⚠️ Precautions</Text>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="warning-outline" size={16} color={colors.warning} />
+                <Text style={styles.cardTitle}>Precautions</Text>
+              </View>
               {precautions.map((p, i) => (
                 <View key={i} style={styles.bulletRow}>
                   <Text style={styles.bulletDot}>•</Text>
@@ -120,12 +133,14 @@ const PoseDetailScreen = ({ route, navigation }) => {
             })}
             activeOpacity={0.85}
           >
-            <Text style={styles.correctorBtnEmoji}>⏱️</Text>
+            <View style={styles.correctorBtnIconBox}>
+              <Ionicons name="timer-outline" size={20} color="#FFFFFF" />
+            </View>
             <View style={styles.correctorBtnContent}>
               <Text style={styles.timerBtnTitle}>Practice With Timer</Text>
               <Text style={styles.timerBtnDesc}>Guided hold for {duration} with voice cues</Text>
             </View>
-            <Text style={styles.timerBtnArrow}>→</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textWhite} />
           </TouchableOpacity>
 
           {/* Try Pose Corrector Button */}
@@ -134,12 +149,14 @@ const PoseDetailScreen = ({ route, navigation }) => {
             onPress={() => navigation.navigate('PoseCorrector')}
             activeOpacity={0.85}
           >
-            <Text style={styles.correctorBtnEmoji}>📸</Text>
+            <View style={styles.correctorBtnIconBox}>
+              <Ionicons name="camera" size={20} color="#FFFFFF" />
+            </View>
             <View style={styles.correctorBtnContent}>
               <Text style={styles.correctorBtnTitle}>Try Pose Corrector</Text>
               <Text style={styles.correctorBtnDesc}>Use camera to check your alignment</Text>
             </View>
-            <Text style={styles.correctorBtnArrow}>→</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textWhite} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -173,7 +190,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.card,
   },
-  favoriteBtnText: { fontSize: 20 },
   heroTitle: {
     ...typography.headerLarge,
     color: colors.textWhite,
@@ -197,7 +213,7 @@ const styles = StyleSheet.create({
   },
   metaItem: { flex: 1, alignItems: 'center' },
   metaDivider: { width: 1, backgroundColor: colors.border, marginVertical: 4 },
-  metaIcon: { fontSize: 20, marginBottom: 4 },
+  metaIcon: { marginBottom: 4 },
   metaLabel: { ...typography.caption, color: colors.textMuted },
   metaValue: { ...typography.bodySmall, fontWeight: '700', color: colors.text, marginTop: 2 },
   card: {
@@ -211,11 +227,16 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: colors.warning,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
   cardTitle: {
     ...typography.headerSmall,
     fontSize: 16,
     color: colors.primary,
-    marginBottom: spacing.sm,
   },
   cardBody: {
     ...typography.body,
@@ -263,7 +284,11 @@ const styles = StyleSheet.create({
   },
   timerBtnTitle: { ...typography.headerSmall, color: colors.textWhite, fontSize: 15 },
   timerBtnDesc: { ...typography.caption, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
-  timerBtnArrow: { fontSize: 20, color: colors.textWhite, fontWeight: '700' },
+  correctorBtnIconBox: {
+    width: 38, height: 38, borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center', marginRight: spacing.md,
+  },
   correctorBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -273,11 +298,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     ...shadows.prominent,
   },
-  correctorBtnEmoji: { fontSize: 24, marginRight: spacing.md },
   correctorBtnContent: { flex: 1 },
   correctorBtnTitle: { ...typography.headerSmall, color: colors.textWhite, fontSize: 15 },
   correctorBtnDesc: { ...typography.caption, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
-  correctorBtnArrow: { fontSize: 20, color: colors.textWhite, fontWeight: '700' },
 });
 
 export default PoseDetailScreen;

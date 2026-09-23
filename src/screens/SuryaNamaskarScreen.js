@@ -4,7 +4,9 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import suryaNamaskarSteps from '../data/suryaNamaskarData';
 import RoundSelector from '../components/RoundSelector';
 import { resolveImageSource } from '../utils/imageUtils';
@@ -82,7 +84,9 @@ const SuryaNamaskarScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <Text style={styles.emoji}>☀️</Text>
+            <LinearGradient colors={gradients.streak} style={styles.headerIconBox}>
+              <Ionicons name="sunny" size={30} color="#FFFFFF" />
+            </LinearGradient>
             <Text style={styles.title}>Surya Namaskar</Text>
             <Text style={styles.subtitle}>Sun Salutation — 12-step sacred sequence</Text>
           </View>
@@ -111,7 +115,8 @@ const SuryaNamaskarScreen = ({ navigation }) => {
           </View>
 
           <TouchableOpacity style={styles.startBtn} onPress={handleStart} activeOpacity={0.85}>
-            <Text style={styles.startBtnText}>Begin Practice →</Text>
+            <Text style={styles.startBtnText}>Begin Practice</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textWhite} />
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -160,7 +165,8 @@ const SuryaNamaskarScreen = ({ navigation }) => {
             })}
             activeOpacity={0.85}
           >
-            <Text style={styles.testPoseButtonText}>Test This Pose →</Text>
+            <Text style={styles.testPoseButtonText}>Test This Pose</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -172,7 +178,8 @@ const SuryaNamaskarScreen = ({ navigation }) => {
             disabled={currentStep === 0 && currentRound === 1}
             activeOpacity={0.8}
           >
-            <Text style={styles.navBtnText}>← Prev</Text>
+            <Ionicons name="chevron-back" size={15} color={colors.text} />
+            <Text style={styles.navBtnText}>Prev</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.stopBtn}
@@ -182,7 +189,8 @@ const SuryaNamaskarScreen = ({ navigation }) => {
             <Text style={styles.stopBtnText}>Stop</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.85}>
-            <Text style={styles.nextBtnText}>{isLastStep ? '✓ Done' : 'Next →'}</Text>
+            <Text style={styles.nextBtnText}>{isLastStep ? 'Done' : 'Next'}</Text>
+            <Ionicons name={isLastStep ? 'checkmark' : 'chevron-forward'} size={15} color={colors.textWhite} />
           </TouchableOpacity>
         </View>
       </View>
@@ -194,7 +202,11 @@ const styles = StyleSheet.create({
   container: { ...screenStyles.container },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', marginBottom: spacing.lg },
-  emoji: { fontSize: 48, marginBottom: spacing.sm },
+  headerIconBox: {
+    width: 64, height: 64, borderRadius: 32,
+    justifyContent: 'center', alignItems: 'center', marginBottom: spacing.sm,
+    ...shadows.prominent,
+  },
   title: { ...typography.headerLarge, color: colors.primary },
   subtitle: { ...typography.bodySmall, color: colors.textLight, marginTop: 4 },
   sectionLabel: { ...typography.label, color: colors.primary, marginTop: spacing.lg, marginBottom: spacing.sm },
@@ -218,6 +230,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardAlt, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
   },
   startBtn: {
+    flexDirection: 'row', justifyContent: 'center', gap: 6,
     backgroundColor: colors.primary, borderRadius: borderRadius.xl,
     paddingVertical: 16, alignItems: 'center', marginTop: spacing.lg, ...shadows.prominent,
   },
@@ -241,13 +254,15 @@ const styles = StyleSheet.create({
   miniStepText: { ...typography.bodySmall, color: colors.textLight, lineHeight: 22 },
   testPoseRow: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   testPoseButton: {
+    flexDirection: 'row', justifyContent: 'center', gap: 4,
     backgroundColor: colors.cardAlt, borderRadius: borderRadius.lg,
     paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
   },
   testPoseButtonText: { ...typography.bodySmall, fontWeight: '700', color: colors.primary },
   navRow: { flexDirection: 'row', padding: spacing.md, gap: spacing.sm },
   navBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: borderRadius.lg,
+    flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 4,
+    paddingVertical: 12, borderRadius: borderRadius.lg,
     backgroundColor: colors.cardAlt, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
   },
   navBtnDisabled: { opacity: 0.4 },
@@ -258,7 +273,8 @@ const styles = StyleSheet.create({
   },
   stopBtnText: { ...typography.bodySmall, fontWeight: '600', color: colors.error },
   nextBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: borderRadius.lg,
+    flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 4,
+    paddingVertical: 12, borderRadius: borderRadius.lg,
     backgroundColor: colors.primary, alignItems: 'center', ...shadows.prominent,
   },
   nextBtnText: { ...typography.bodySmall, fontWeight: '700', color: colors.textWhite },

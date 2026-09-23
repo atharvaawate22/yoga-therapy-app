@@ -21,7 +21,46 @@ const defaultResult = {
   distances: {},
 };
 
-const POSE_DISPLAY_NAMES = {
+// Common (English) name shown first and spoken aloud -- the Sanskrit name
+// alone ("Vrksasana") means nothing to most users; "Tree Pose" does.
+const POSE_COMMON_NAMES = {
+  downward_dog: 'Downward-Facing Dog',
+  low_lunge: 'Low Lunge',
+  seated_twist: 'Seated Spinal Twist',
+  butterfly_pose: 'Butterfly Pose',
+  childs_pose: "Child's Pose",
+  cat_cow: 'Cat-Cow Stretch',
+  plow_pose: 'Plow Pose',
+  garland_pose: 'Garland Pose',
+  boat_pose: 'Boat Pose',
+  seated_forward_bend: 'Seated Forward Bend',
+  shoulder_stand: 'Shoulder Stand',
+  bridge_pose: 'Bridge Pose',
+  triangle_pose: 'Triangle Pose',
+  upward_dog: 'Upward-Facing Dog',
+  chair_pose: 'Chair Pose',
+  forward_bend: 'Standing Forward Fold',
+  warrior_pose: 'Warrior II',
+  tree_pose: 'Tree Pose',
+  pranamasana: 'Prayer Pose',
+  hasta_uttanasana: 'Raised Arms Pose',
+  hasta_padasana: 'Hand to Foot Pose',
+  ashwa_sanchalanasana: 'Equestrian Pose',
+  dandasana: 'Plank Pose',
+  ashtanga_namaskara: 'Eight-Limbed Pose',
+  cobra_pose: 'Cobra Pose',
+  tadasana: 'Mountain Pose',
+  nopose: 'No Pose',
+  // Retained for a classifier trained before these labels were merged into
+  // downward_dog / cobra_pose / forward_bend. A retrained model never emits them.
+  adho_mukha_svanasana: 'Downward-Facing Dog',
+  bhujangasana: 'Cobra Pose',
+  uttanasana: 'Standing Forward Fold',
+};
+
+// Sanskrit name shown as a subtitle under the common name -- never spoken
+// aloud on its own (see speakCorrection), just for reference.
+const POSE_SANSKRIT_NAMES = {
   downward_dog: 'Adho Mukha Svanasana',
   low_lunge: 'Anjaneyasana',
   seated_twist: 'Ardha Matsyendrasana',
@@ -48,13 +87,14 @@ const POSE_DISPLAY_NAMES = {
   ashtanga_namaskara: 'Ashtanga Namaskara',
   cobra_pose: 'Bhujangasana',
   tadasana: 'Tadasana',
-  nopose: 'No Pose',
-  // Retained for a classifier trained before these labels were merged into
-  // downward_dog / cobra_pose / forward_bend. A retrained model never emits them.
   adho_mukha_svanasana: 'Adho Mukha Svanasana',
   bhujangasana: 'Bhujangasana',
   uttanasana: 'Uttanasana',
 };
+
+// Backward-compatible alias: existing lookups (POSE_DISPLAY_NAMES[id]) keep
+// working and now resolve to the common name.
+const POSE_DISPLAY_NAMES = POSE_COMMON_NAMES;
 
 const PoseCorrectorScreen = ({ route }) => {
   const expectedPoseId = route?.params?.expectedPoseId || null;
@@ -378,6 +418,7 @@ const PoseCorrectorScreen = ({ route }) => {
   };
 
   const poseDisplayName = POSE_DISPLAY_NAMES[result.pose] || result.pose?.toUpperCase();
+  const poseSanskritName = POSE_SANSKRIT_NAMES[result.pose] || null;
   const expectedDisplay = expectedPoseId
     ? (POSE_DISPLAY_NAMES[expectedPoseId] || expectedPoseName || expectedPoseId)
     : null;
@@ -486,6 +527,9 @@ const PoseCorrectorScreen = ({ route }) => {
                 </Text>
               </View>
               <Text style={styles.liveOverlayPose}>{poseDisplayName}</Text>
+              {poseSanskritName && (
+                <Text style={styles.liveOverlaySanskrit}>{poseSanskritName}</Text>
+              )}
               <Text style={styles.liveOverlayConf}>Confidence: {(Number(result.confidence) * 100).toFixed(0)}%</Text>
               <Text style={styles.liveOverlayHint}>{result.corrections?.[0] || 'No correction available'}</Text>
             </View>
@@ -580,6 +624,9 @@ const PoseCorrectorScreen = ({ route }) => {
             <Text style={styles.demoNoticeText}>⚠ Backend not detected — showing simulated demo analysis.</Text>
           )}
           <Text style={styles.resultPose}>{poseDisplayName}</Text>
+          {poseSanskritName && (
+            <Text style={styles.resultSanskrit}>{poseSanskritName}</Text>
+          )}
           <Text style={styles.resultText}>Confidence: {(Number(result.confidence) * 100).toFixed(0)}%</Text>
           <Text style={styles.lastUpdatedText}>
             Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Not analyzed yet'}
@@ -675,7 +722,8 @@ const styles = StyleSheet.create({
   liveStatusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   liveOverlayTitle: { ...typography.caption, color: '#B4FFB0', fontWeight: '700' },
   liveOverlayPose: { ...typography.bodySmall, color: '#FFFFFF', fontWeight: '700', marginTop: 2 },
-  liveOverlayConf: { ...typography.caption, color: '#FFFFFF' },
+  liveOverlaySanskrit: { ...typography.caption, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', fontSize: 11 },
+  liveOverlayConf: { ...typography.caption, color: '#FFFFFF', marginTop: 2 },
   liveOverlayHint: { ...typography.caption, color: '#D6EDFF', marginTop: 2 },
   cameraActions: { flexDirection: 'row', padding: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
   galleryRow: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
@@ -725,7 +773,8 @@ const styles = StyleSheet.create({
   demoBadgeText: { fontSize: 10, fontWeight: '800', color: '#946200', letterSpacing: 0.5 },
   demoNoticeText: { ...typography.caption, color: '#946200', marginBottom: spacing.xs },
   sectionTitle: { ...typography.headerSmall, color: colors.primary },
-  resultPose: { ...typography.headerSmall, color: colors.text, fontWeight: '800', marginBottom: 2 },
+  resultPose: { ...typography.headerSmall, color: colors.text, fontWeight: '800' },
+  resultSanskrit: { ...typography.caption, color: colors.textLight, fontStyle: 'italic', marginBottom: 4 },
   resultText: { ...typography.bodySmall, color: colors.textLight },
   lastUpdatedText: { ...typography.caption, color: colors.textMuted, marginTop: 2, marginBottom: spacing.sm },
   subSectionTitle: { ...typography.bodySmall, color: colors.text, fontWeight: '700', marginBottom: spacing.sm },

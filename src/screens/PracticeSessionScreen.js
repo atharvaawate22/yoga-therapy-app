@@ -13,7 +13,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
-import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import { savePracticeSession, parseDurationSec, formatDuration } from '../data/sessionStorage';
 import { getVoiceEnabled } from '../data/userStorage';
 import { resolveImageSource } from '../utils/imageUtils';
@@ -168,7 +170,9 @@ const PracticeSessionScreen = ({ route, navigation }) => {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.centered}>
-          <Text style={styles.doneEmoji}>🎉</Text>
+          <LinearGradient colors={gradients.streak} style={styles.doneIconBox}>
+            <Ionicons name="trophy" size={32} color="#FFFFFF" />
+          </LinearGradient>
           <Text style={styles.doneTitle}>Session Complete!</Text>
           <Text style={styles.doneSubtitle}>{title}</Text>
 
@@ -189,7 +193,8 @@ const PracticeSessionScreen = ({ route, navigation }) => {
             onPress={() => navigation.navigate('MainTabs', { screen: 'History' })}
             activeOpacity={0.85}
           >
-            <Text style={styles.historyBtnText}>📊 View My Progress</Text>
+            <Ionicons name="stats-chart-outline" size={17} color={colors.textWhite} />
+            <Text style={styles.historyBtnText}>View My Progress</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.doneBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
             <Text style={styles.doneBtnText}>Done</Text>
@@ -213,7 +218,11 @@ const PracticeSessionScreen = ({ route, navigation }) => {
         <View style={styles.topRow}>
           <Text style={styles.progressText}>Pose {poseIndex + 1}/{poses.length} • {title}</Text>
           <TouchableOpacity onPress={toggleVoice} activeOpacity={0.7}>
-            <Text style={styles.voiceToggle}>{isVoiceEnabled ? '🔊' : '🔇'}</Text>
+            <Ionicons
+              name={isVoiceEnabled ? 'volume-high-outline' : 'volume-mute-outline'}
+              size={20}
+              color={colors.textLight}
+            />
           </TouchableOpacity>
         </View>
 
@@ -249,17 +258,20 @@ const PracticeSessionScreen = ({ route, navigation }) => {
             disabled={poseIndex === 0}
             activeOpacity={0.8}
           >
-            <Text style={styles.ctrlBtnText}>← Prev</Text>
+            <Ionicons name="chevron-back" size={15} color={colors.text} />
+            <Text style={styles.ctrlBtnText}>Prev</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.pauseBtn}
             onPress={() => setIsPaused(p => !p)}
             activeOpacity={0.85}
           >
-            <Text style={styles.pauseBtnText}>{isPaused ? '▶ Resume' : '⏸ Pause'}</Text>
+            <Ionicons name={isPaused ? 'play' : 'pause'} size={15} color={colors.textWhite} />
+            <Text style={styles.pauseBtnText}>{isPaused ? 'Resume' : 'Pause'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.ctrlBtn} onPress={handleSkip} activeOpacity={0.8}>
-            <Text style={styles.ctrlBtnText}>Skip →</Text>
+            <Text style={styles.ctrlBtnText}>Skip</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.text} />
           </TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.endBtn} onPress={handleEnd} activeOpacity={0.8}>
@@ -283,7 +295,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
   },
   progressText: { ...typography.caption, color: colors.textMuted },
-  voiceToggle: { fontSize: 20 },
   scrollBody: { paddingBottom: spacing.md },
 
   poseImage: { width: '100%', height: 220, backgroundColor: colors.backgroundDark },
@@ -315,13 +326,15 @@ const styles = StyleSheet.create({
 
   controls: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm },
   ctrlBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: borderRadius.lg,
+    flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 4,
+    paddingVertical: 12, borderRadius: borderRadius.lg,
     backgroundColor: colors.cardAlt, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
   },
   ctrlBtnDisabled: { opacity: 0.4 },
   ctrlBtnText: { ...typography.bodySmall, fontWeight: '600', color: colors.text },
   pauseBtn: {
-    flex: 1.3, paddingVertical: 12, borderRadius: borderRadius.lg,
+    flex: 1.3, flexDirection: 'row', justifyContent: 'center', gap: 4,
+    paddingVertical: 12, borderRadius: borderRadius.lg,
     backgroundColor: colors.primary, alignItems: 'center', ...shadows.prominent,
   },
   pauseBtnText: { ...typography.bodySmall, fontWeight: '700', color: colors.textWhite },
@@ -329,7 +342,11 @@ const styles = StyleSheet.create({
   endBtnText: { ...typography.bodySmall, fontWeight: '600', color: colors.error },
 
   /* Done state */
-  doneEmoji: { fontSize: 56, marginBottom: spacing.sm },
+  doneIconBox: {
+    width: 72, height: 72, borderRadius: 36,
+    justifyContent: 'center', alignItems: 'center', marginBottom: spacing.sm,
+    ...shadows.prominent,
+  },
   doneTitle: { ...typography.headerLarge, color: colors.primary },
   doneSubtitle: { ...typography.body, color: colors.textLight, marginBottom: spacing.lg },
   summaryCard: {
@@ -341,6 +358,7 @@ const styles = StyleSheet.create({
   summaryValue: { ...typography.headerMedium, color: colors.primary },
   summaryLabel: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   historyBtn: {
+    flexDirection: 'row', justifyContent: 'center', gap: 6,
     backgroundColor: colors.primary, borderRadius: borderRadius.xl, paddingVertical: 14,
     alignItems: 'center', alignSelf: 'stretch', ...shadows.prominent,
   },
