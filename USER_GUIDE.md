@@ -2,8 +2,8 @@
 
 This app is **not on the Play Store**. You install it directly as an APK file on
 an Android phone. This guide explains where to get the APK, how to install it,
-what works out of the box, and how to set up the **Live Pose Corrector**, which
-needs a companion server running on a laptop on the **same Wi-Fi network**.
+what works out of the box, and how the **Live Pose Corrector** (AI camera
+feedback) works — it just needs your phone to be online, nothing to set up.
 
 ---
 
@@ -22,8 +22,8 @@ no internet:
 | 📊 Progress | Practice history, day streak, weekly minutes, 7-day activity chart |
 | 🔔 Daily reminders | One local notification a day at a time you pick |
 
-The **only** feature that needs anything extra is the **📸 Live Pose Corrector**
-(AI camera feedback) — see section 4.
+The **📸 Live Pose Corrector** (AI camera feedback) needs one extra thing:
+your phone online — see section 4.
 
 ---
 
@@ -42,11 +42,13 @@ The **only** feature that needs anything extra is the **📸 Live Pose Corrector
 Open that link on your Android phone and the APK downloads directly — then
 continue with section 3. Older versions are listed on the
 [Releases page](https://github.com/atharvaawate22/yoga-therapy-app/releases).
+This link is republished automatically by CI on every push to `main` (see
+[`.github/workflows/eas-build.yml`](.github/workflows/eas-build.yml)), so
+it's always the current build — no manual step needed.
 
-> ⚠️ **Note about the Pose Corrector:** the server address is baked into the
-> APK at build time (see section 5). The downloaded APK expects the laptop
-> server at the IP it was built with — check the release notes for which IP
-> that is. **Every other feature works regardless**, with no server at all.
+> ℹ️ **Note about the Pose Corrector:** every APK is built pointing at the
+> hosted backend (see section 4) — no server address to configure, no
+> network requirements beyond your phone having internet.
 
 <details>
 <summary>For developers: building the APK yourself</summary>
@@ -57,11 +59,12 @@ continue with section 3. Older versions are listed on the
 npm install && npm install -g eas-cli
 eas login
 eas init                       # first time only
-# Recommended: set your laptop IP in src/config/poseApi.js (fallbackHost)
 eas build --platform android --profile preview
 ```
 
-The finished build gives you a download link + QR code.
+By default this points at the hosted backend baked into
+[`src/config/poseApi.js`](src/config/poseApi.js) (`HOSTED_API_URL`) — no
+configuration needed. The finished build gives you a download link + QR code.
 
 **Local build** (needs JDK 17 + Android SDK):
 
@@ -73,7 +76,16 @@ gradlew assembleRelease        # .\gradlew on Windows, ./gradlew on macOS/Linux
 
 The APK lands in `android/app/build/outputs/apk/release/app-release.apk`.
 
-**Publishing a new release** so the download button stays current:
+**Running your own copy of the backend instead of the hosted one:** see
+[`backend/README.md`](backend/README.md) for deployment options (AWS
+Lambda, Render, or plain `uvicorn` on a LAN machine for local dev). If you
+point the app at a LAN server for local development, `fallbackHost` in
+`src/config/poseApi.js` is only used in Expo dev mode when the dev host
+can't be auto-detected — it's not used in a built APK, which always uses
+`HOSTED_API_URL` if set.
+
+**Publishing a new release manually** (CI does this automatically on every
+push to `main` — see above; only needed for an out-of-band release):
 
 ```bash
 gh release create v1.x.x path/to/app-release.apk#yoga-therapy.apk --title "v1.x.x" --notes "..."
@@ -101,101 +113,58 @@ That's it — everything in section 1 now works with no further setup.
 
 ---
 
-## 4. Using the Live Pose Corrector (needs the laptop server)
+## 4. Using the Live Pose Corrector
 
 ### How it actually works
 
-The AI that recognizes your pose does **not** run on the phone. The app takes a
-camera frame roughly every second and sends it over your **local Wi-Fi** to a
-small Python server (FastAPI + TensorFlow/MoveNet) running on a laptop or PC.
-The server sends back the detected pose and correction tips, which the app
-shows on screen and speaks aloud.
+The AI that recognizes your pose does **not** run on the phone. The app takes
+a camera frame (or a gallery photo) and sends it over the internet to a
+hosted backend — a MoveNet (TensorFlow Lite) keypoint model plus a trained
+classifier, running on AWS Lambda behind API Gateway. The backend sends back
+the detected pose and correction tips, which the app shows on screen and
+speaks aloud.
 
 ```
-Your phone (app)  ──camera frame──▶  Laptop on the SAME Wi-Fi (Python server, port 8000)
+Your phone (app)  ──camera frame──▶  Hosted backend on AWS (internet)
                   ◀──pose + tips──
 ```
 
 Consequences of this design:
 
-- Phone and laptop must be on the **same Wi-Fi network** (or the laptop
-  connected to the phone's hotspot).
-- **No internet is used or required** — traffic never leaves your network.
-- If the server isn't running, the app shows an **"Analysis server
-  unreachable"** banner in the Pose Corrector. Everything else keeps working.
+- **Just needs your phone to be online** (Wi-Fi or mobile data) — no laptop,
+  no local network, nothing to start or configure.
+- The backend is serverless and **cold-starts** after a period of inactivity:
+  the first request after a while can take 30–40 seconds, which is longer
+  than the gateway's timeout, so that first attempt may show a brief demo
+  fallback. Retrying immediately after hits the now-warm backend and works
+  normally. Every request after that is fast (roughly 1 analysis/sec).
+- If your phone has no internet connection at all, the app shows an
+  **"Analysis server unreachable"** banner and falls back to a simulated demo
+  so the feature still demonstrates end-to-end. Everything else in the app
+  keeps working regardless.
 
-### Setting up the server (one-time, on the laptop)
+### Using it
 
-Python 3.11 recommended:
-
-```bash
-git clone https://github.com/atharvaawate22/yoga-therapy-app.git
-cd yoga-therapy-app/backend
-python -m venv .venv
-.venv\Scripts\activate          # Windows   (macOS/Linux: source .venv/bin/activate)
-pip install -r requirements.txt
-```
-
-### Every time you want to use the corrector
-
-1. **Start the server** on the laptop (from the `backend/` folder):
-   ```bash
-   uvicorn yoga_pose_engine:app --host 0.0.0.0 --port 8000
-   ```
-   Check it's alive: open `http://localhost:8000/health` in the laptop browser.
-
-2. **Find the laptop's Wi-Fi IP address:**
-   - Windows: run `ipconfig` → "Wireless LAN adapter Wi-Fi" → *IPv4 Address*
-     (e.g. `192.168.1.7`)
-   - macOS/Linux: `ifconfig` or `ip addr`
-
-3. **Make sure the app points at that IP** — see section 5. If the APK was
-   built with the right IP you don't need to do anything.
-
-4. **Allow the port through the firewall** (Windows usually prompts the first
-   time you run uvicorn — click *Allow*). If you missed it:
-   Windows Security → Firewall → Allow an app, or allow inbound TCP port 8000.
-
-5. In the app, open **Live Mobile Pose Corrector** from the Home screen and tap
-   **Test Backend Connection** at the bottom. If it says *Backend OK*, you're
-   set — step onto your mat.
+1. In the app, open **Live Mobile Pose Corrector** from the Home screen (live
+   camera) or use **🖼️ Image → Upload from Gallery** for a single photo.
+2. Optionally tap **Test Backend Connection** at the bottom to confirm it's
+   reachable before you start.
+3. Stand back so your **full body** is in frame, in reasonably good lighting.
 
 ### Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| "Analysis server unreachable" banner | Server not started, wrong IP baked into the APK, or different Wi-Fi networks. Work through steps 1–4 above, then tap **Retry Connection**. |
-| *Backend OK* but detection feels slow | Normal on Wi-Fi (~1 analysis/sec). Move the laptop closer to the router; make sure the laptop isn't on a VPN. |
-| Works on home Wi-Fi, not elsewhere | The server IP changes per network. Easiest fix: use your **phone's hotspot**, connect the laptop to it, and build the APK with that hotspot IP — it then stays stable anywhere. |
-| Pose never recognized | Stand back so your **full body** is in frame, good lighting, camera roughly waist height. |
+| "Analysis server unreachable" banner, or a "DEMO" badge on the result | Phone has no internet, or the very first request hit a cold start and timed out (see above) — tap **Retry Connection** or just try again; the second attempt hits the now-warm backend. |
+| Pose never recognized ("No full-body skeleton detected") | Stand back so your **full body** — head to feet — is in frame, good lighting, camera roughly waist height. |
 | No voice feedback | Check the 🔊 toggle in the corrector, the global **Settings → Voice guidance** switch, and media volume. |
 
----
-
-## 5. The server IP address — the one thing to get right
-
-The app decides where to send camera frames like this
-(in [`src/config/poseApi.js`](src/config/poseApi.js)):
-
-- **Running via Expo Go / dev mode:** the server address is detected
-  automatically from the development machine — you don't configure anything.
-- **Installed as an APK:** there is no dev machine to detect, so the app uses
-  the hardcoded fallback:
-
-```js
-// src/config/poseApi.js
-const fallbackHost = '192.168.1.7';   // ← change this to YOUR laptop's Wi-Fi IP
-```
-
-**Before building an APK**, set `fallbackHost` to the laptop's IP on the Wi-Fi
-network where you'll practice (or to your phone-hotspot IP for a
-network-independent setup). If the laptop's IP changes later (routers reassign
-IPs), either make the IP static in your router settings, use the hotspot trick
-from the troubleshooting table, or rebuild the APK.
+Want to run your own copy of the backend instead of the hosted one (e.g. for
+local development)? See [`backend/README.md`](backend/README.md).
 
 ---
 
-## 6. Updating and uninstalling
+## 5. Updating and uninstalling
 
 - **Update:** install a newer APK over the old one (same package id) — your
   profile, history, favorites and custom sets are kept.
@@ -205,6 +174,8 @@ from the troubleshooting table, or rebuild the APK.
 
 ## Privacy
 
-Everything stays on your device (profile, history, favorites — stored locally).
-Camera frames from the Pose Corrector go only to *your own* server on *your own*
-network and are not stored. The app makes no other network requests.
+Profile, history, favorites and custom sets stay on your device (stored
+locally) — nothing is synced to an account. Camera frames from the Pose
+Corrector are sent to the hosted backend over the internet for analysis and
+are processed in memory only, never written to disk or stored anywhere on
+the server side.
