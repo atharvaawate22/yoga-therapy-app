@@ -1,0 +1,70 @@
+name: Publish Latest Successful APK
+
+# Manual-only: republishes the most recent *already-finished* EAS Android
+# build to the "latest-preview" GitHub Release, without triggering a new
+# EAS build. Useful when eas-build.yml's build step is blocked (e.g. the
+# EAS free-tier monthly quota) but there's still a good build sitting on
+# EAS to point the README's download button/QR code at.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Republish last finished build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN secret is not set."
+            exit 1
+          fi
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Fetch latest finished build's APK URL
+        id: apk
+        run: |
+          URL=$(eas build:list --platform android --limit 1 --non-interactive --json --status finished | node -e "
+            const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const url = data?.[0]?.artifacts?.buildUrl;
+            if (!url) { console.error('No finished build found'); process.exit(1); }
+            console.log(url);
+          ")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK
+        run: curl -L -o yoga-therapy.apk "${{ steps.apk.outputs.url }}"
+
+      - name: Publish APK to the "latest preview" GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-preview
+          name: Latest Preview Build (auto-updated)
+          body: |
+            Republished from the most recent finished EAS build (not a new
+            build -- see [User Guide](https://github.com/${{ github.repository }}/blob/main/USER_GUIDE.md)).
+          prerelease: false
+          make_latest: true
+          files: yoga-therapy.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
