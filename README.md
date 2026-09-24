@@ -7,6 +7,8 @@ For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_W
 ## 📥 Download & Install (APK)
 
 This app is **not on the Play Store** — it installs directly as an Android APK.
+Checking this out on your phone? Tap the button below. On a laptop? Scan the
+QR code with your phone's camera.
 
 <p>
   <a href="https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk">
@@ -14,21 +16,23 @@ This app is **not on the Play Store** — it installs directly as an Android APK
   </a>
 </p>
 
-**[⬇ Direct download — yoga-therapy.apk](https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk)**
-(always points to the newest release; all versions on the
-[Releases page](https://github.com/atharvaawate22/yoga-therapy-app/releases))
+<p>
+  <img src="assets/readme/download-qr.png" alt="Scan to download the APK" width="180" />
+</p>
 
-**Install & use:** see the **[USER_GUIDE.md](USER_GUIDE.md)** — it covers
-installing the APK, what works fully offline (almost everything), and how to
-set up the **Live Pose Corrector**, which needs the Python server running on
-a laptop on the **same Wi-Fi network** as your phone.
+**[⬇ Direct download — yoga-therapy.apk](https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk)**
+— automatically rebuilt and republished on every push to `main`, so this
+always points to the current build (all versions on the
+[Releases page](https://github.com/atharvaawate22/yoga-therapy-app/releases)).
+
+**Install & use:** see the **[USER_GUIDE.md](USER_GUIDE.md)** for install
+steps and a feature walkthrough.
 
 > **Key point for APK users:** every feature (guided practice, timers, history,
 > streaks, custom sets, reminders…) works standalone with no server and no
-> internet. Only the camera-based Pose Corrector talks to the laptop server
-> over your local Wi-Fi — and the server's IP must be set in
-> `src/config/poseApi.js` (`fallbackHost`) **before building the APK**.
-> Details in the [user guide](USER_GUIDE.md).
+> internet. The camera-based **Live Pose Corrector** talks to a hosted AWS
+> backend over the internet (no laptop or local network needed) — it just
+> needs your phone to be online. Details in the [user guide](USER_GUIDE.md).
 
 ## Features
 

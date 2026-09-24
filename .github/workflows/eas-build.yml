@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: write # needed to publish/update the "latest-preview" GitHub Release
+
 jobs:
   build:
     name: Build Android preview APK
@@ -67,11 +70,34 @@ jobs:
           echo "[Download the APK]($URL)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download APK for this workflow run
-        run: curl -L -o app-preview.apk "${{ steps.apk.outputs.url }}"
+        run: curl -L -o yoga-therapy.apk "${{ steps.apk.outputs.url }}"
 
       - name: Upload APK as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: yoga-therapy-app-preview-apk
-          path: app-preview.apk
+          path: yoga-therapy.apk
           retention-days: 30
+
+      # Publishes the same APK to a rolling "latest-preview" GitHub Release
+      # (asset name yoga-therapy.apk) on every successful build. The
+      # README's download button/QR code point at the permanent
+      # /releases/latest/download/yoga-therapy.apk URL, which GitHub always
+      # resolves to whichever non-prerelease release was published most
+      # recently -- so this keeps that link (and the QR code, which never
+      # needs to change since it just encodes the URL text) current without
+      # any manual step.
+      - name: Publish APK to the "latest preview" GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-preview
+          name: Latest Preview Build (auto-updated)
+          body: |
+            Automatically rebuilt from commit ${{ github.sha }} on every push to `main`.
+            This is a preview/sideload build (not a Play Store release) -- see the
+            [User Guide](https://github.com/${{ github.repository }}/blob/main/USER_GUIDE.md).
+          prerelease: false
+          make_latest: true
+          files: yoga-therapy.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
