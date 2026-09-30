@@ -12,6 +12,7 @@ import { POSE_API_BASE_URL, POSE_API_ENDPOINTS, POSE_API_TIMEOUT_MS } from '../c
 import { getUserProfile, getVoiceEnabled } from '../data/userStorage';
 import { getNextDemoResult } from '../data/demoPoseData';
 import { savePracticeSession, formatDuration } from '../data/sessionStorage';
+import { prepareImageForUpload } from '../utils/uploadImage';
 import ExperienceBadge from '../components/ExperienceBadge';
 
 const defaultResult = {
@@ -103,6 +104,17 @@ const PoseCorrectorScreen = ({ route }) => {
   const liveDetectionTimerRef = useRef(null);
   const liveDetectingRef = useRef(false);
   const lastSpokenCorrectionRef = useRef('');
+  // Each live loop carries the id it was started with and exits once this
+  // moves on, so a request still in flight when Stop is pressed can't keep an
+  // orphaned loop running alongside a new one.
+  const liveLoopIdRef = useRef(0);
+  // Set when the user presses Stop, so auto-start doesn't immediately undo it.
+  const autoStartBlockedRef = useRef(false);
+  // The live loop runs from the closure it was started in, so anything it
+  // reads that can change mid-session must come from a ref, not state.
+  const analyzingRef = useRef(false);
+  const voiceEnabledRef = useRef(true);
+  const experienceRef = useRef('beginner');
 
   const [permission, requestPermission] = useCameraPermissions();
   // Rear camera by default: fitting a standing full-body pose into frame
@@ -150,14 +162,22 @@ const PoseCorrectorScreen = ({ route }) => {
 
   useEffect(() => {
     ImagePicker.requestMediaLibraryPermissionsAsync();
-    getUserProfile().then(p => { if (p?.experience) setExperienceLevel(p.experience); });
-    getVoiceEnabled().then(setIsVoiceEnabled);
+    getUserProfile().then(p => {
+      if (!p?.experience) return;
+      experienceRef.current = p.experience;
+      setExperienceLevel(p.experience);
+    });
+    getVoiceEnabled().then(v => {
+      voiceEnabledRef.current = v;
+      setIsVoiceEnabled(v);
+    });
   }, []);
 
   // Cleanup speech and timer on unmount; save any in-progress live session
   useEffect(() => {
     return () => {
       liveDetectingRef.current = false;
+      liveLoopIdRef.current += 1;
       if (liveDetectionTimerRef.current) clearTimeout(liveDetectionTimerRef.current);
       Speech.stop();
       finalizeLiveSession(false);
@@ -165,7 +185,7 @@ const PoseCorrectorScreen = ({ route }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const speakCorrection = (corrections, pose) => {
-    if (!isVoiceEnabled || !corrections?.length) return;
+    if (!voiceEnabledRef.current || !corrections?.length) return;
     const correction = corrections[0];
     if (!correction || correction === lastSpokenCorrectionRef.current) return;
     lastSpokenCorrectionRef.current = correction;
@@ -182,10 +202,11 @@ const PoseCorrectorScreen = ({ route }) => {
   };
 
   const analyzeBase64Image = async (imageBase64, source = 'image', showAlerts = true) => {
-    if (!imageBase64 || isAnalyzing) return;
+    if (!imageBase64 || analyzingRef.current) return;
     const controller = new AbortController();
     let timeoutId;
     try {
+      analyzingRef.current = true;
       setIsAnalyzing(true);
       timeoutId = setTimeout(() => controller.abort(), POSE_API_TIMEOUT_MS);
       const response = await fetch(apiUrl, {
@@ -195,13 +216,15 @@ const PoseCorrectorScreen = ({ route }) => {
           image_base64: imageBase64,
           session_id: sessionId,
           source,
-          experience_level: experienceLevel,
+          experience_level: experienceRef.current,
         }),
         signal: controller.signal,
       });
       if (!response.ok) {
         const text = await response.text();
-        const error = new Error(text || 'Pose API request failed.');
+        const error = new Error(response.status === 429
+          ? 'The analysis server is busy. Please try again in a moment.'
+          : text || 'Pose API request failed.');
         // A gateway/service-unavailable status (502/503/504) means the
         // backend infra itself didn't respond in time -- e.g. a cold
         // serverless container taking longer to start than the gateway's
@@ -221,8 +244,9 @@ const PoseCorrectorScreen = ({ route }) => {
       setResult(newResult);
       setLastUpdated(new Date());
       setIsBackendOnline(true);
-      // Track detections + speak correction in live mode
-      if (source === 'live') {
+      // Track detections + speak correction in live mode (a response that
+      // lands after Stop was pressed is shown but not counted or spoken)
+      if (source === 'live' && liveDetectingRef.current) {
         if (newResult.pose && newResult.pose !== 'nopose') {
           livePoseCountsRef.current[newResult.pose] =
             (livePoseCountsRef.current[newResult.pose] || 0) + 1;
@@ -243,7 +267,7 @@ const PoseCorrectorScreen = ({ route }) => {
         setResult(demoResult);
         setLastUpdated(new Date());
         setLiveError(null);
-        if (source === 'live') speakCorrection(demoResult.corrections, demoResult.pose);
+        if (source === 'live' && liveDetectingRef.current) speakCorrection(demoResult.corrections, demoResult.pose);
       } else {
         const message = error?.message || 'Failed to analyze pose.';
         if (showAlerts) Alert.alert('Pose Analysis Error', message);
@@ -251,16 +275,16 @@ const PoseCorrectorScreen = ({ route }) => {
       }
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
+      analyzingRef.current = false;
       setIsAnalyzing(false);
     }
   };
 
   const analyzeCurrentFrame = async (source = 'live', showAlerts = true) => {
-    if (!cameraRef.current || isAnalyzing) return;
+    if (!cameraRef.current || analyzingRef.current) return;
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: source === 'live' ? 0.3 : 0.5,
+        quality: 0.8,
         // skipProcessing returns the raw, un-rotated sensor frame (only an
         // EXIF orientation tag notes the correction), which the backend's
         // OpenCV decode doesn't reliably honor -- it then center-crops a
@@ -270,9 +294,10 @@ const PoseCorrectorScreen = ({ route }) => {
         // the body-presence gate to actually see a full body.
         shutterSound: false,
       });
-      if (!photo?.base64) throw new Error('Unable to capture frame from camera.');
+      if (!photo?.uri) throw new Error('Unable to capture frame from camera.');
+      const imageBase64 = await prepareImageForUpload(photo.uri, photo.width, photo.height);
       setSelectedImageUri(null);
-      await analyzeBase64Image(photo.base64, source, showAlerts);
+      await analyzeBase64Image(imageBase64, source, showAlerts);
     } catch (error) {
       if (!showAlerts) {
         // Live mode: camera not ready/available yet — show a simulated
@@ -281,7 +306,7 @@ const PoseCorrectorScreen = ({ route }) => {
         setIsDemoMode(true);
         setResult(demoResult);
         setLastUpdated(new Date());
-        speakCorrection(demoResult.corrections, demoResult.pose);
+        if (liveDetectingRef.current) speakCorrection(demoResult.corrections, demoResult.pose);
         return;
       }
       const message = error?.message || 'Failed to analyze pose.';
@@ -315,8 +340,13 @@ const PoseCorrectorScreen = ({ route }) => {
     }
   };
 
-  const stopLiveDetection = () => {
+  // `byUser` = the Stop button: keep live detection off until the user
+  // starts it again or re-enters live mode. Internal stops (mode switch,
+  // camera flip, gallery pick) leave auto-start alone.
+  const stopLiveDetection = (byUser = false) => {
+    if (byUser) autoStartBlockedRef.current = true;
     liveDetectingRef.current = false;
+    liveLoopIdRef.current += 1;
     if (liveDetectionTimerRef.current) {
       clearTimeout(liveDetectionTimerRef.current);
       liveDetectionTimerRef.current = null;
@@ -327,16 +357,17 @@ const PoseCorrectorScreen = ({ route }) => {
     finalizeLiveSession();
   };
 
-  const runLiveLoop = () => {
-    if (!liveDetectingRef.current) return;
+  const runLiveLoop = (loopId) => {
+    if (!liveDetectingRef.current || loopId !== liveLoopIdRef.current) return;
     analyzeCurrentFrame('live', false).finally(() => {
-      if (!liveDetectingRef.current) return;
-      liveDetectionTimerRef.current = setTimeout(runLiveLoop, 850);
+      if (!liveDetectingRef.current || loopId !== liveLoopIdRef.current) return;
+      liveDetectionTimerRef.current = setTimeout(() => runLiveLoop(loopId), 850);
     });
   };
 
-  const startLiveDetection = async () => {
-    if (isLiveDetection || !cameraRef.current || !isCameraReady) return;
+  const startLiveDetection = () => {
+    if (liveDetectingRef.current || !cameraRef.current || !isCameraReady) return;
+    autoStartBlockedRef.current = false;
     setLiveError(null);
     setSelectedImageUri(null);
     setLiveSummary(null);
@@ -344,35 +375,45 @@ const PoseCorrectorScreen = ({ route }) => {
     liveStartTsRef.current = Date.now();
     livePoseCountsRef.current = {};
     liveDetectingRef.current = true;
+    liveLoopIdRef.current += 1;
     setIsLiveDetection(true);
-    runLiveLoop();
+    runLiveLoop(liveLoopIdRef.current);
   };
 
-  const toggleLiveDetection = async () => {
-    if (isLiveDetection) { stopLiveDetection(); return; }
-    await startLiveDetection();
+  const toggleLiveDetection = () => {
+    if (isLiveDetection) { stopLiveDetection(true); return; }
+    startLiveDetection();
   };
 
   const toggleVoice = () => {
-    if (isVoiceEnabled) {
+    const next = !voiceEnabledRef.current;
+    if (!next) {
       Speech.stop();
       lastSpokenCorrectionRef.current = '';
     }
-    setIsVoiceEnabled(v => !v);
+    voiceEnabledRef.current = next;
+    setIsVoiceEnabled(next);
   };
 
   const openFeedbackMode = (mode) => {
     if (mode === feedbackMode) return;
     stopLiveDetection();
     setLiveError(null);
-    if (mode === 'live') setSelectedImageUri(null);
+    if (mode === 'live') {
+      setSelectedImageUri(null);
+      autoStartBlockedRef.current = false;
+    }
     setFeedbackMode(mode);
   };
 
+  // Auto-start when live mode is showing and the camera is ready -- but never
+  // right after the user pressed Stop (this effect re-runs when
+  // isLiveDetection flips to false, which used to restart it instantly).
   useEffect(() => {
     if (!permission?.granted || feedbackMode !== 'live' || !isCameraReady || selectedImageUri || isLiveDetection) return;
+    if (autoStartBlockedRef.current) return;
     startLiveDetection();
-  }, [permission?.granted, feedbackMode, isCameraReady, selectedImageUri, isLiveDetection]);
+  }, [permission?.granted, feedbackMode, isCameraReady, selectedImageUri, isLiveDetection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const analyzeFromGallery = async () => {
     if (isAnalyzing) return;
@@ -388,13 +429,19 @@ const PoseCorrectorScreen = ({ route }) => {
     // that's already missing body parts, no matter what the backend does
     // with it. Send the original full photo instead.
     const picked = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: false, quality: 0.45, base64: true, mediaTypes: ['images'],
+      allowsEditing: false, quality: 1, mediaTypes: ['images'],
     });
     if (picked.canceled || !picked.assets?.length) return;
     const asset = picked.assets[0];
-    if (!asset.base64) { Alert.alert('Invalid image', 'Unable to read selected image.'); return; }
+    let imageBase64;
+    try {
+      imageBase64 = await prepareImageForUpload(asset.uri, asset.width, asset.height);
+    } catch {
+      Alert.alert('Invalid image', 'Unable to read selected image.');
+      return;
+    }
     setSelectedImageUri(asset.uri ?? null);
-    await analyzeBase64Image(asset.base64, 'image');
+    await analyzeBase64Image(imageBase64, 'image');
   };
 
   const toggleCamera = () => {
