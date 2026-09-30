@@ -13,6 +13,12 @@ env:
   ECR_REPOSITORY: yoga-pose-engine
   LAMBDA_FUNCTION_NAME: yoga-pose-engine
   LAMBDA_ROLE_ARN: arn:aws:iam::968138090176:role/yoga-pose-engine-lambda-role
+  # The HTTP API the app calls (src/config/poseApi.js HOSTED_API_URL).
+  API_GATEWAY_ID: vb57jykmzc
+  # The endpoint is public and its URL ships inside the APK, so cap request
+  # rates to bound the Lambda bill. One live session sends about 1 req/s.
+  THROTTLE_RATE_LIMIT: "10"
+  THROTTLE_BURST_LIMIT: "20"
 
 jobs:
   deploy:
@@ -71,6 +77,18 @@ jobs:
               --no-cli-pager
             aws lambda wait function-active --function-name "$LAMBDA_FUNCTION_NAME"
           fi
+
+      - name: Apply API Gateway throttling
+        run: |
+          STAGES=$(aws apigatewayv2 get-stages --api-id "$API_GATEWAY_ID" --query 'Items[].StageName' --output text)
+          for STAGE in $STAGES; do
+            aws apigatewayv2 update-stage \
+              --api-id "$API_GATEWAY_ID" \
+              --stage-name "$STAGE" \
+              --default-route-settings "ThrottlingRateLimit=$THROTTLE_RATE_LIMIT,ThrottlingBurstLimit=$THROTTLE_BURST_LIMIT" \
+              --no-cli-pager >/dev/null
+            echo "Throttled stage '$STAGE': rate=$THROTTLE_RATE_LIMIT/s burst=$THROTTLE_BURST_LIMIT"
+          done
 
       - name: Ensure public Function URL exists
         run: |

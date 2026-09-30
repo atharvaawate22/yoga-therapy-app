@@ -14,5 +14,6 @@ fastapi>=0.135
 pydantic>=2.12
 numpy>=2,<3
 opencv-python-headless>=4.13
+Pillow>=11.1          # yoga_pose_engine decodes uploads with PIL (EXIF orientation)
 pytest>=8.4
 httpx>=0.28          # required by fastapi.testclient

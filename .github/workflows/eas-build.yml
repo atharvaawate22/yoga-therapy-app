@@ -3,6 +3,15 @@ name: EAS Build (Android APK)
 on:
   push:
     branches: [main]
+    # Each EAS build spends free-tier quota, so skip pushes that can't change
+    # the APK: backend code (deployed by its own workflow), docs, and CI files
+    # other than this one.
+    paths-ignore:
+      - "backend/**"
+      - "**/*.md"
+      - ".github/workflows/deploy-lambda-backend.yml"
+      - ".github/workflows/publish-latest-apk.yml"
+      - ".github/workflows/backend-tests.yml"
   workflow_dispatch: {}
 
 permissions:
