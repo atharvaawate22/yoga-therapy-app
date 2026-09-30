@@ -29,7 +29,32 @@ def test_confident_prediction_returns_pose(client: TestClient, sample_image_base
     assert body["pose"] == "warrior_pose"
     assert body["confidence"] == pytest.approx(0.95, abs=1e-3)
     assert body["corrections"], "a detected pose must come with at least one cue"
-    assert body["debug_image_base64"], "skeleton overlay should be returned"
+
+
+def test_debug_image_is_opt_in(client: TestClient, sample_image_base64) -> None:
+    """The overlay is large and unused by the app, so it's only sent on request."""
+    default = client.post(ANALYZE, json=payload(sample_image_base64)).json()
+    requested = client.post(
+        ANALYZE, json=payload(sample_image_base64, include_debug_image=True)
+    ).json()
+
+    assert default["debug_image_base64"] is None
+    assert requested["debug_image_base64"], "skeleton overlay should be returned"
+
+
+def test_large_uploads_are_downscaled_before_processing(sample_image_base64) -> None:
+    import cv2
+    import numpy as np
+
+    import yoga_pose_engine as engine
+
+    big = np.full((4000, 3000, 3), 127, dtype=np.uint8)
+    ok, encoded = cv2.imencode(".jpg", big)
+    assert ok
+    decoded = engine._decode_base64_image(base64.b64encode(encoded.tobytes()).decode("ascii"))
+
+    assert max(decoded.shape[:2]) == engine.MAX_DECODE_SIDE
+    assert decoded.shape[0] > decoded.shape[1], "aspect ratio must be preserved"
 
 
 def test_response_includes_full_probability_distribution(
@@ -107,6 +132,18 @@ def test_low_visibility_frame_is_rejected(make_client, sample_image_base64) -> N
 
     assert body["pose"] == "nopose"
     assert "No full-body skeleton detected" in body["corrections"][0]
+
+
+def test_rejection_message_is_stable_across_frames(make_client, sample_image_base64) -> None:
+    """The app speaks corrections[0] and skips repeats, so it must not vary per frame."""
+    messages = set()
+    for score in (0.05, 0.1):
+        client = make_client(movenet=StubMoveNet(make_movenet_output(score=score)))
+        body = client.post(ANALYZE, json=payload(sample_image_base64)).json()
+        messages.add(body["corrections"][0])
+
+    assert len(messages) == 1
+    assert "=" not in messages.pop(), "keypoint scores belong in logs, not the response"
 
 
 def test_missing_torso_is_rejected(make_client, sample_image_base64) -> None:
@@ -268,3 +305,12 @@ def test_request_without_crop_confirmed_is_analyzed(
     response = client.post(ANALYZE, json=payload(sample_image_base64))
 
     assert response.json()["pose"] == "warrior_pose"
+
+
+def test_oversized_payload_is_rejected(client: TestClient) -> None:
+    import yoga_pose_engine as engine
+
+    huge = "A" * (engine.MAX_IMAGE_BASE64_CHARS + 1)
+    response = client.post(ANALYZE, json=payload(huge))
+
+    assert response.status_code == 422

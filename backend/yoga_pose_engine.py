@@ -70,9 +70,22 @@ BOOTSTRAP_MIN_SAMPLES = 30
 
 VALID_EXPERIENCE_LEVELS = {"beginner", "intermediate", "expert"}
 
+# Uploads are downscaled to this longest side on decode. MoveNet only sees a
+# 192px square, so extra resolution buys nothing but decode and encode time
+# (older app builds send full 12MP+ camera frames).
+MAX_DECODE_SIDE = 1280
+MAX_IMAGE_BASE64_CHARS = 4_000_000
+
 
 class PoseAnalyzeRequest(BaseModel):
-    image_base64: str = Field(..., description="JPEG/PNG frame, optionally a data URL.")
+    # ~3 MB of JPEG. The app sends frames resized to 960px (a few hundred KB);
+    # anything far larger is a misbehaving client, and the public endpoint
+    # shouldn't spend Lambda time decoding it.
+    image_base64: str = Field(
+        ...,
+        max_length=MAX_IMAGE_BASE64_CHARS,
+        description="JPEG/PNG frame, optionally a data URL.",
+    )
     session_id: Optional[str] = Field(
         None, description="Stable id per live session; enables the stability filter."
     )
@@ -81,6 +94,11 @@ class PoseAnalyzeRequest(BaseModel):
     )
     experience_level: str = Field(
         "beginner", description="beginner | intermediate | expert"
+    )
+    include_debug_image: bool = Field(
+        False,
+        description="Return the skeleton overlay JPEG. Off by default: the app "
+        "never displays it and it multiplied every live response's size.",
     )
 
 
@@ -244,6 +262,7 @@ def _decode_base64_image(image_b64: str) -> np.ndarray:
     try:
         with Image.open(io.BytesIO(buffer)) as pil_image:
             pil_image = ImageOps.exif_transpose(pil_image)
+            pil_image.thumbnail((MAX_DECODE_SIDE, MAX_DECODE_SIDE))
             rgb_image = pil_image.convert("RGB")
             image = cv2.cvtColor(np.array(rgb_image), cv2.COLOR_RGB2BGR)
     except Exception as exc:
@@ -254,13 +273,7 @@ def _decode_base64_image(image_b64: str) -> np.ndarray:
 
 
 def _describe_gate_failure(keypoints: np.ndarray) -> str:
-    """Compact, human-readable dump of why ``has_body`` rejected a frame.
-
-    Temporary diagnostic aid: surfaced both in logs and in the API response
-    itself (folded into the "No full-body skeleton detected" correction
-    text) so a screenshot from a failing device carries the actual keypoint
-    confidence scores, without needing CloudWatch access to see them.
-    """
+    """Compact, human-readable dump of why ``has_body`` rejected a frame (logs only)."""
     core_scores = ", ".join(
         f"{KEYPOINT_NAMES[idx]}={keypoints[idx, 2]:.2f}" for idx in CORE_KEYPOINTS
     )
@@ -316,6 +329,38 @@ def _distance_metrics(keypoints: np.ndarray, pose: str) -> Dict[str, float]:
 # ── Corrections ───────────────────────────────────────────────────────────
 
 
+def _to_torso_units(keypoints: np.ndarray) -> np.ndarray:
+    """Rescale keypoint x/y so 100 units = the person's torso length.
+
+    The correction thresholds used to be raw pixels of the uploaded image, so
+    a 30px tolerance meant 15% of the frame on a small photo and under 1% on a
+    12MP one: the same pose got different feedback depending on the phone and
+    how far away the person stood. Torso length (shoulder midpoint to hip
+    midpoint) is used rather than shoulder width because it stays stable from
+    a side view, where the two shoulders overlap.
+    """
+    shoulder_mid = (keypoints[5, :2] + keypoints[6, :2]) / 2.0
+    hip_mid = (keypoints[11, :2] + keypoints[12, :2]) / 2.0
+    torso = float(np.linalg.norm(shoulder_mid - hip_mid))
+    if torso < 1e-6:
+        span = np.max(keypoints[:, :2], axis=0) - np.min(keypoints[:, :2], axis=0)
+        torso = float(max(span[0], span[1], 1.0)) / 3.0
+    scaled = keypoints.astype(np.float32).copy()
+    scaled[:, :2] = keypoints[:, :2] / torso * 100.0
+    return scaled
+
+
+def _joint_angle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
+    """Angle at ``b`` in degrees for the chain a-b-c (180 = straight)."""
+    v1 = a[:2] - b[:2]
+    v2 = c[:2] - b[:2]
+    denom = float(np.linalg.norm(v1) * np.linalg.norm(v2))
+    if denom < 1e-6:
+        return 180.0
+    cos = float(np.clip(np.dot(v1, v2) / denom, -1.0, 1.0))
+    return float(np.degrees(np.arccos(cos)))
+
+
 def _generate_corrections(
     pose: str, keypoints: np.ndarray, experience_level: str = "beginner"
 ) -> List[str]:
@@ -325,6 +370,9 @@ def _generate_corrections(
             "No stable pose detected",
             "Keep your full body visible and hold still for 1 to 2 seconds",
         ]
+
+    # All distances below are in percent of torso length (see _to_torso_units).
+    keypoints = _to_torso_units(keypoints)
 
     # Tolerance thresholds per experience level
     if experience_level == "expert":
@@ -389,7 +437,9 @@ def _generate_corrections(
             corrections.append("Keep shoulders level and relaxed away from ears")
         shoulder_y = (l_shoulder[1] + r_shoulder[1]) / 2
         hip_y = (l_hip[1] + r_hip[1]) / 2
-        if shoulder_y < hip_y - 30:
+        # Upright, the shoulders sit a full torso length above the hips; less
+        # than ~80% of that means the spine is slumping or leaning.
+        if hip_y - shoulder_y < 80:
             corrections.append("Sit tall — lengthen your spine upward out of your hips")
         if not corrections:
             corrections.append("Great Butterfly Pose! Let gravity gently open your hips.")
@@ -406,9 +456,9 @@ def _generate_corrections(
     # ── 6. Cat-Cow ──
     elif pose == "cat_cow":
         if abs(l_shoulder[1] - r_shoulder[1]) > shoulder_tol:
-            corrections.append("Keep wrists directly under shoulders — level them out")
+            corrections.append("Keep your shoulders level — press evenly through both hands")
         if abs(l_hip[1] - r_hip[1]) > arm_tol:
-            corrections.append("Keep knees directly under hips — don't let them sway")
+            corrections.append("Keep your hips level over both knees — don't let them sway")
         if not corrections:
             corrections.append("Good Cat-Cow! Sync your breath with each movement.")
 
@@ -425,9 +475,10 @@ def _generate_corrections(
     elif pose == "garland_pose":
         if abs(l_shoulder[1] - r_shoulder[1]) > shoulder_tol:
             corrections.append("Keep your chest lifted and shoulders level")
-        shoulder_y = (l_shoulder[1] + r_shoulder[1]) / 2
         hip_y = (l_hip[1] + r_hip[1]) / 2
-        if hip_y < shoulder_y:
+        knee_y = (l_knee[1] + r_knee[1]) / 2
+        # In a full squat the hips drop to around knee height.
+        if knee_y - hip_y > 30:
             corrections.append("Squat deeper — lower your hips toward the floor")
         if not corrections:
             corrections.append("Great Garland Pose! Press elbows into knees and lengthen spine.")
@@ -524,7 +575,13 @@ def _generate_corrections(
         if abs(l_shoulder[1] - r_shoulder[1]) > shoulder_tol:
             corrections.append("Keep shoulders relaxed and level — don't shrug")
         if strict:
-            if abs(l_knee[0] - l_ankle[0]) > arm_tol:
+            # The front leg is the bent one; it may be either side.
+            left_bend = _joint_angle(l_hip, l_knee, l_ankle)
+            right_bend = _joint_angle(r_hip, r_knee, r_ankle)
+            front_knee, front_ankle = (
+                (l_knee, l_ankle) if left_bend <= right_bend else (r_knee, r_ankle)
+            )
+            if abs(front_knee[0] - front_ankle[0]) > arm_tol:
                 corrections.append("Align front knee directly over the ankle")
         if not corrections:
             corrections.append("Powerful Warrior Two! Sink the front knee deeper and gaze forward.")
@@ -537,7 +594,10 @@ def _generate_corrections(
             corrections.append("Keep hips level — don't let the standing-leg hip push out")
         wrist_y = (l_wrist[1] + r_wrist[1]) / 2
         shoulder_y = (l_shoulder[1] + r_shoulder[1]) / 2
-        if wrist_y > shoulder_y + arm_tol:
+        # Hands overhead or pressed together at the chest are both correct;
+        # only arms hanging apart below the shoulders get a cue.
+        hands_apart = abs(l_wrist[0] - r_wrist[0]) > 40
+        if wrist_y > shoulder_y + arm_tol and hands_apart:
             corrections.append("Raise arms overhead or keep hands at heart center")
         if not corrections:
             corrections.append("Beautiful Tree Pose! Fix your gaze on a still point and breathe.")
@@ -636,11 +696,16 @@ def analyze_pose(
 
     output = movenet.infer(image_rgb)
     keypoints = extract_keypoints_pixels(output, image_rgb.shape[1], image_rgb.shape[0])
-    skeleton_base64 = _draw_skeleton_base64(cropped_bgr, keypoints)
+    drawable = bool(np.any(keypoints[:, 2] >= SKELETON_DRAW_MIN_SCORE))
+    skeleton_base64 = (
+        _draw_skeleton_base64(cropped_bgr, keypoints)
+        if payload.include_debug_image
+        else None
+    )
 
     logger.debug("keypoints=%s", np.round(keypoints, 3).tolist())
 
-    if skeleton_base64 is None or not has_body(keypoints):
+    if not drawable or not has_body(keypoints):
         diagnostic = _describe_gate_failure(keypoints)
         logger.info(
             "source=%s pose=%s reason=no_body latency_ms=%.0f %s",
@@ -649,8 +714,12 @@ def analyze_pose(
             (time.perf_counter() - started) * 1000,
             diagnostic,
         )
+        # The keypoint scores stay in the log line above. The user-facing text
+        # must be stable: the app speaks corrections[0] aloud and only skips
+        # repeats, so a per-frame number dump was read out every second.
         return _response_for_nopose(
-            f"No full-body skeleton detected ({diagnostic})", skeleton_base64
+            "No full-body skeleton detected. Step back so your whole body is in frame.",
+            skeleton_base64,
         )
 
     normalized = normalize_keypoints(keypoints)
