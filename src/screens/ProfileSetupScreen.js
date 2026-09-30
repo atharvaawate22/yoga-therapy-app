@@ -1,5 +1,5 @@
 /**
- * ProfileSetupScreen - Onboarding screen for user profile
+ * ProfileSetupScreen - Onboarding screen for user profile (also used to edit it)
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
-import { setUserProfile, setOnboarded } from '../data/userStorage';
+import { getUserProfile, setUserProfile, isOnboarded, setOnboarded } from '../data/userStorage';
 import { REMINDER_OPTIONS, getReminderSetting, applyReminderSetting } from '../utils/reminders';
 
 // Same icon language as ExperienceBadge, for consistency across the app.
@@ -32,12 +32,35 @@ const ProfileSetupScreen = ({ navigation }) => {
   const [selectedAge, setSelectedAge] = useState('26-35');
   const [experience, setExperience] = useState('beginner');
   const [reminder, setReminder] = useState('off');
+  const [initialReminder, setInitialReminder] = useState('off');
+  // This screen is also opened from Home/Settings to edit an existing
+  // profile. The saved values must be loaded first, otherwise saving (or
+  // "Skip") overwrote the profile with the blank onboarding defaults.
+  const [isEditing, setIsEditing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getReminderSetting().then(r => setReminder(r.key));
+    Promise.all([isOnboarded(), getUserProfile(), getReminderSetting()]).then(([done, profile, r]) => {
+      setReminder(r.key);
+      setInitialReminder(r.key);
+      if (done) {
+        setIsEditing(true);
+        setName(profile.name === 'Yogi' ? '' : profile.name || '');
+        // Older profiles saved only a numeric age; map it to the nearest range.
+        const savedAge = profile.ageRange || ageRanges.reduce((best, a) =>
+          Math.abs(a.value - profile.age) < Math.abs(best.value - profile.age) ? a : best
+        ).key;
+        setSelectedAge(savedAge);
+        setExperience(profile.experience || 'beginner');
+      }
+      setLoaded(true);
+    });
   }, []);
 
   const handleContinue = async () => {
+    if (!loaded || saving) return;
+    setSaving(true);
     const ageObj = ageRanges.find(a => a.key === selectedAge);
     await setUserProfile({
       name: name.trim() || 'Yogi',
@@ -46,14 +69,22 @@ const ProfileSetupScreen = ({ navigation }) => {
       experience,
     });
     await setOnboarded();
-    const result = await applyReminderSetting(reminder);
-    if (!result.ok && result.reason === 'permission-denied') {
-      Alert.alert(
-        'Notifications Disabled',
-        'Reminder was not set because notification permission is off. Enable notifications in your device settings and try again.'
-      );
+    // Only touch reminders when the choice changed, so editing a profile
+    // doesn't re-prompt for notification permission.
+    if (!isEditing || reminder !== initialReminder) {
+      const result = await applyReminderSetting(reminder);
+      if (!result.ok && result.reason === 'permission-denied') {
+        Alert.alert(
+          'Notifications Disabled',
+          'Reminder was not set because notification permission is off. Enable notifications in your device settings and try again.'
+        );
+      }
     }
-    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    if (isEditing) {
+      navigation.goBack();
+    } else {
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    }
   };
 
   return (
@@ -65,9 +96,13 @@ const ProfileSetupScreen = ({ navigation }) => {
             <LinearGradient colors={gradients.hero} style={styles.headerIconBox}>
               <Ionicons name="body" size={34} color="#FFFFFF" />
             </LinearGradient>
-            <Text style={styles.title}>Welcome to{'\n'}Yoga Therapy</Text>
+            <Text style={styles.title}>
+              {isEditing ? 'Edit Your Profile' : 'Welcome to\nYoga Therapy'}
+            </Text>
             <Text style={styles.subtitle}>
-              Let's personalize your experience for better yoga guidance.
+              {isEditing
+                ? 'Update your details to adjust your yoga guidance.'
+                : "Let's personalize your experience for better yoga guidance."}
             </Text>
           </View>
 
@@ -156,13 +191,19 @@ const ProfileSetupScreen = ({ navigation }) => {
 
           {/* Continue Button */}
           <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} activeOpacity={0.85}>
-            <Text style={styles.continueBtnText}>Start My Journey</Text>
+            <Text style={styles.continueBtnText}>{isEditing ? 'Save Changes' : 'Start My Journey'}</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textWhite} />
           </TouchableOpacity>
 
-          <Text style={styles.skip} onPress={handleContinue}>
-            Skip for now
-          </Text>
+          {isEditing ? (
+            <Text style={styles.skip} onPress={() => navigation.goBack()}>
+              Cancel
+            </Text>
+          ) : (
+            <Text style={styles.skip} onPress={handleContinue}>
+              Skip for now
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
