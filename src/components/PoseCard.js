@@ -3,13 +3,13 @@
  * Tappable card displaying yoga pose with difficulty badge
  */
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme/theme';
 import ExperienceBadge from './ExperienceBadge';
-import { resolveImageSource } from '../utils/imageUtils';
+import PoseImage from './PoseImage';
 
 const PoseCard = ({ pose, onPress }) => {
-  const { name, sanskritName, description, duration, image, difficulty } = pose;
+  const { id, name, sanskritName, description, duration, image, difficulty } = pose;
 
   const CardWrapper = onPress ? TouchableOpacity : View;
   const wrapperProps = onPress ? { onPress, activeOpacity: 0.85 } : {};
@@ -18,7 +18,7 @@ const PoseCard = ({ pose, onPress }) => {
     <CardWrapper style={styles.card} {...wrapperProps}>
       {/* Yoga pose image */}
       <View style={styles.imageContainer}>
-        <Image source={resolveImageSource(image)} style={styles.image} resizeMode="cover" />
+        <PoseImage poseId={id} image={image} style={styles.image} iconSize={56} />
         <View style={styles.imageOverlay} />
         {difficulty && (
           <View style={styles.badgeContainer}>

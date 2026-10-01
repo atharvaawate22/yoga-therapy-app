@@ -6,6 +6,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import { getUserProfile, getVoiceEnabled, setVoiceEnabled } from '../data/userStorage';
 import { clearPracticeSessions } from '../data/sessionStorage';
@@ -34,11 +35,14 @@ const SettingsScreen = ({ navigation }) => {
     const prev = reminder;
     setReminder(key);
     const result = await applyReminderSetting(key);
-    if (!result.ok && result.reason === 'permission-denied') {
-      setReminder(prev === key ? 'off' : prev);
+    if (!result.ok) {
+      // The previous reminder is still scheduled, so show it again.
+      setReminder(prev);
       Alert.alert(
-        'Notifications Disabled',
-        'Enable notifications for this app in your device settings, then try again.'
+        result.reason === 'permission-denied' ? 'Notifications Disabled' : 'Reminder Not Set',
+        result.reason === 'permission-denied'
+          ? 'Enable notifications for this app in your device settings, then try again.'
+          : 'Something went wrong setting the reminder. Please try again.'
       );
     }
   };
@@ -137,7 +141,7 @@ const SettingsScreen = ({ navigation }) => {
 
         <View style={styles.footerRow}>
           <Ionicons name="leaf-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.footer}>Yoga Therapy App · v1.0.0{'\n'}Practice safely.</Text>
+          <Text style={styles.footer}>Yoga Therapy App · v{Constants.expoConfig?.version ?? '?'}{'\n'}Practice safely.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -3,6 +3,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAllPoses } from './yogaData';
 
 const PROFILE_KEY = '@yoga_user_profile';
 const CUSTOM_SETS_KEY = '@yoga_custom_sets';
@@ -43,41 +44,68 @@ export const setUserProfile = async (profile) => {
   await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
 };
 
-/** Get all custom yoga sets */
-export const getCustomSets = async () => {
+// Custom sets are stored as pose ids only and resolved against yogaData on
+// read. Storing whole pose objects froze their text at save time and kept
+// `require()` image handles, which are bundle-specific numbers that can point
+// at the wrong image (or none) after an app update.
+//
+// Stored: { id, name, poseIds: string[], createdAt }
+// Returned by getCustomSets: the same plus `poses` (resolved pose objects).
+
+const readStoredSets = async () => {
   try {
     const json = await AsyncStorage.getItem(CUSTOM_SETS_KEY);
-    return json ? JSON.parse(json) : [];
+    const sets = json ? JSON.parse(json) : [];
+    // Sets saved by older builds hold full `poses` objects instead of ids.
+    return sets.map(({ poses, ...set }) => ({
+      ...set,
+      poseIds: set.poseIds || (poses || []).map(p => p.id).filter(Boolean),
+    }));
   } catch { return []; }
 };
 
-/** Save a new custom set */
-export const saveCustomSet = async (set) => {
-  const sets = await getCustomSets();
-  const newSet = {
+const writeStoredSets = (sets) =>
+  AsyncStorage.setItem(CUSTOM_SETS_KEY, JSON.stringify(
+    sets.map(({ id, name, poseIds, createdAt }) => ({ id, name, poseIds, createdAt }))
+  ));
+
+/** Get all custom yoga sets, with `poses` resolved from their ids */
+export const getCustomSets = async () => {
+  const sets = await readStoredSets();
+  const byId = new Map(getAllPoses().map(p => [p.id, p]));
+  return sets.map(set => ({
     ...set,
+    poses: set.poseIds.map(id => byId.get(id)).filter(Boolean),
+  }));
+};
+
+/** Save a new custom set: { name, poseIds } */
+export const saveCustomSet = async ({ name, poseIds }) => {
+  const sets = await readStoredSets();
+  const newSet = {
     id: `set_${Date.now()}`,
+    name,
+    poseIds,
     createdAt: new Date().toISOString(),
   };
   sets.push(newSet);
-  await AsyncStorage.setItem(CUSTOM_SETS_KEY, JSON.stringify(sets));
+  await writeStoredSets(sets);
   return newSet;
 };
 
 /** Delete a custom set by id */
 export const deleteCustomSet = async (id) => {
-  const sets = await getCustomSets();
-  const filtered = sets.filter(s => s.id !== id);
-  await AsyncStorage.setItem(CUSTOM_SETS_KEY, JSON.stringify(filtered));
+  const sets = await readStoredSets();
+  await writeStoredSets(sets.filter(s => s.id !== id));
 };
 
-/** Update a custom set */
+/** Update a custom set: updates may contain { name, poseIds } */
 export const updateCustomSet = async (id, updates) => {
-  const sets = await getCustomSets();
+  const sets = await readStoredSets();
   const idx = sets.findIndex(s => s.id === id);
   if (idx >= 0) {
     sets[idx] = { ...sets[idx], ...updates };
-    await AsyncStorage.setItem(CUSTOM_SETS_KEY, JSON.stringify(sets));
+    await writeStoredSets(sets);
   }
 };
 

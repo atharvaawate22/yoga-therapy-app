@@ -6,7 +6,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
-import yogaData from '../data/yogaData';
+import yogaData, { posesForExperience } from '../data/yogaData';
 import { getUserProfile } from '../data/userStorage';
 import ProblemCard from '../components/ProblemCard';
 
@@ -29,13 +29,7 @@ const HealthScanScreen = ({ navigation }) => {
     ? allProblems.filter(p => p.toLowerCase().includes(search.toLowerCase()))
     : null;
 
-  const filterByExperience = (poses) => {
-    if (!profile) return poses;
-    const exp = profile.experience;
-    if (exp === 'beginner') return poses.filter(p => p.difficulty === 'beginner');
-    if (exp === 'intermediate') return poses.filter(p => p.difficulty !== 'advanced');
-    return poses; // expert sees all
-  };
+  const filterByExperience = (poses) => posesForExperience(poses, profile?.experience);
 
   const handleProblemPress = (problemName) => {
     const poses = filterByExperience(yogaData[problemName]);

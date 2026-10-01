@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, ScrollView,
+  ActivityIndicator, Alert, Image, Linking, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { colors, typography, spacing, borderRadius, screenStyles, shadows } from '../theme/theme';
 import { POSE_API_BASE_URL, POSE_API_ENDPOINTS, POSE_API_TIMEOUT_MS } from '../config/poseApi';
 import { getUserProfile, getVoiceEnabled } from '../data/userStorage';
@@ -84,7 +85,7 @@ const POSE_SANSKRIT_NAMES = {
   hasta_uttanasana: 'Hasta Uttanasana',
   hasta_padasana: 'Hasta Padasana',
   ashwa_sanchalanasana: 'Ashwa Sanchalanasana',
-  dandasana: 'Dandasana',
+  dandasana: 'Kumbhakasana', // model label for plank; see suryaNamaskarData
   ashtanga_namaskara: 'Ashtanga Namaskara',
   cobra_pose: 'Bhujangasana',
   tadasana: 'Tadasana',
@@ -97,6 +98,8 @@ const POSE_SANSKRIT_NAMES = {
 // working and now resolve to the common name.
 const POSE_DISPLAY_NAMES = POSE_COMMON_NAMES;
 
+const KEEP_AWAKE_TAG = 'pose-corrector-live';
+
 const PoseCorrectorScreen = ({ route }) => {
   const expectedPoseId = route?.params?.expectedPoseId || null;
   const expectedPoseName = route?.params?.expectedPoseName || null;
@@ -108,8 +111,6 @@ const PoseCorrectorScreen = ({ route }) => {
   // moves on, so a request still in flight when Stop is pressed can't keep an
   // orphaned loop running alongside a new one.
   const liveLoopIdRef = useRef(0);
-  // Set when the user presses Stop, so auto-start doesn't immediately undo it.
-  const autoStartBlockedRef = useRef(false);
   // The live loop runs from the closure it was started in, so anything it
   // reads that can change mid-session must come from a ref, not state.
   const analyzingRef = useRef(false);
@@ -161,7 +162,6 @@ const PoseCorrectorScreen = ({ route }) => {
   useEffect(() => { checkBackend(); }, [checkBackend]);
 
   useEffect(() => {
-    ImagePicker.requestMediaLibraryPermissionsAsync();
     getUserProfile().then(p => {
       if (!p?.experience) return;
       experienceRef.current = p.experience;
@@ -180,6 +180,7 @@ const PoseCorrectorScreen = ({ route }) => {
       liveLoopIdRef.current += 1;
       if (liveDetectionTimerRef.current) clearTimeout(liveDetectionTimerRef.current);
       Speech.stop();
+      deactivateKeepAwake(KEEP_AWAKE_TAG);
       finalizeLiveSession(false);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -340,11 +341,7 @@ const PoseCorrectorScreen = ({ route }) => {
     }
   };
 
-  // `byUser` = the Stop button: keep live detection off until the user
-  // starts it again or re-enters live mode. Internal stops (mode switch,
-  // camera flip, gallery pick) leave auto-start alone.
-  const stopLiveDetection = (byUser = false) => {
-    if (byUser) autoStartBlockedRef.current = true;
+  const stopLiveDetection = () => {
     liveDetectingRef.current = false;
     liveLoopIdRef.current += 1;
     if (liveDetectionTimerRef.current) {
@@ -352,6 +349,7 @@ const PoseCorrectorScreen = ({ route }) => {
       liveDetectionTimerRef.current = null;
     }
     Speech.stop();
+    deactivateKeepAwake(KEEP_AWAKE_TAG);
     lastSpokenCorrectionRef.current = '';
     setIsLiveDetection(false);
     finalizeLiveSession();
@@ -365,9 +363,13 @@ const PoseCorrectorScreen = ({ route }) => {
     });
   };
 
+  // Live mode only starts from the Start button: it uploads a camera frame
+  // about once a second, which the user should choose to do (and see a
+  // notice about) rather than have begin as soon as the screen opens.
   const startLiveDetection = () => {
     if (liveDetectingRef.current || !cameraRef.current || !isCameraReady) return;
-    autoStartBlockedRef.current = false;
+    // Holding a pose means not touching the phone; don't let the screen sleep.
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
     setLiveError(null);
     setSelectedImageUri(null);
     setLiveSummary(null);
@@ -381,7 +383,7 @@ const PoseCorrectorScreen = ({ route }) => {
   };
 
   const toggleLiveDetection = () => {
-    if (isLiveDetection) { stopLiveDetection(true); return; }
+    if (isLiveDetection) { stopLiveDetection(); return; }
     startLiveDetection();
   };
 
@@ -399,30 +401,15 @@ const PoseCorrectorScreen = ({ route }) => {
     if (mode === feedbackMode) return;
     stopLiveDetection();
     setLiveError(null);
-    if (mode === 'live') {
-      setSelectedImageUri(null);
-      autoStartBlockedRef.current = false;
-    }
+    if (mode === 'live') setSelectedImageUri(null);
     setFeedbackMode(mode);
   };
-
-  // Auto-start when live mode is showing and the camera is ready -- but never
-  // right after the user pressed Stop (this effect re-runs when
-  // isLiveDetection flips to false, which used to restart it instantly).
-  useEffect(() => {
-    if (!permission?.granted || feedbackMode !== 'live' || !isCameraReady || selectedImageUri || isLiveDetection) return;
-    if (autoStartBlockedRef.current) return;
-    startLiveDetection();
-  }, [permission?.granted, feedbackMode, isCameraReady, selectedImageUri, isLiveDetection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const analyzeFromGallery = async () => {
     if (isAnalyzing) return;
     stopLiveDetection();
-    const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!mediaPermission.granted) {
-      Alert.alert('Permission needed', 'Please allow gallery access to pick an image.');
-      return;
-    }
+    // No media-library permission needed: launchImageLibraryAsync uses the
+    // system photo picker, which only hands over the one image chosen.
     // allowsEditing opens a manual crop step with no aspect ratio enforced --
     // its initial crop box is not the full image, so a user who taps confirm
     // without dragging it out to the edges silently sends a cropped photo
@@ -457,10 +444,12 @@ const PoseCorrectorScreen = ({ route }) => {
       const response = await fetch(healthUrl, { method: 'GET', signal: controller.signal });
       clearTimeout(timeoutId);
       if (!response.ok) throw new Error(`Backend returned status ${response.status}`);
-      Alert.alert('Backend OK', `Connected successfully to ${healthUrl}`);
+      setIsBackendOnline(true);
+      Alert.alert('Server OK', 'The analysis server is reachable.');
     } catch {
-      Alert.alert('Backend Unreachable',
-        `Cannot reach ${healthUrl}.\n\n1. Start backend API on laptop.\n2. Keep phone + laptop on same Wi-Fi.\n3. Allow Python/port 8000 in Windows Firewall.`);
+      setIsBackendOnline(false);
+      Alert.alert('Server Unreachable',
+        `Cannot reach ${healthUrl}.\n\nCheck that your phone is online. If it is, the server may be waking up after being idle -- try again in a minute.`);
     }
   };
 
@@ -469,7 +458,8 @@ const PoseCorrectorScreen = ({ route }) => {
   const expectedDisplay = expectedPoseId
     ? (POSE_DISPLAY_NAMES[expectedPoseId] || expectedPoseName || expectedPoseId)
     : null;
-  const isExpectedMatch = expectedPoseId ? result.pose === expectedPoseId : false;
+  // A simulated demo result must never count as matching the target pose.
+  const isExpectedMatch = expectedPoseId && !isDemoMode ? result.pose === expectedPoseId : false;
 
   if (!permission) {
     return (
@@ -483,7 +473,20 @@ const PoseCorrectorScreen = ({ route }) => {
     return (
       <SafeAreaView style={styles.centeredContainer}>
         <Text style={styles.permissionTitle}>Camera access is required</Text>
-        <Text style={styles.helperText}>Enable camera permission in settings to use live pose correction.</Text>
+        <Text style={styles.helperText}>
+          {permission.canAskAgain
+            ? 'The pose corrector needs your camera to see your pose.'
+            : 'Camera access was denied. Enable it for this app in your device settings.'}
+        </Text>
+        <TouchableOpacity
+          style={[styles.primaryButton, styles.permissionButton]}
+          onPress={() => (permission.canAskAgain ? requestPermission() : Linking.openSettings())}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.primaryButtonText}>
+            {permission.canAskAgain ? 'Allow Camera' : 'Open Settings'}
+          </Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -499,7 +502,7 @@ const PoseCorrectorScreen = ({ route }) => {
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineTitle}>⚠️ Analysis server unreachable</Text>
             <Text style={styles.offlineText}>
-              Pose detection needs the backend running. Start it on your laptop and keep both devices on the same Wi-Fi.
+              Pose detection needs an internet connection. If you're online, the server may be waking up after being idle -- retry in a minute.
             </Text>
             <TouchableOpacity style={styles.offlineRetryBtn} onPress={checkBackend} activeOpacity={0.8}>
               <Text style={styles.offlineRetryText}>↻ Retry Connection</Text>
@@ -573,7 +576,9 @@ const PoseCorrectorScreen = ({ route }) => {
                   {isLiveDetection ? 'LIVE DETECTION ON' : 'LIVE DETECTION OFF'}
                 </Text>
               </View>
-              <Text style={styles.liveOverlayPose}>{poseDisplayName}</Text>
+              <Text style={styles.liveOverlayPose}>
+                {isDemoMode ? `DEMO · ${poseDisplayName}` : poseDisplayName}
+              </Text>
               {poseSanskritName && (
                 <Text style={styles.liveOverlaySanskrit}>{poseSanskritName}</Text>
               )}
@@ -611,6 +616,10 @@ const PoseCorrectorScreen = ({ route }) => {
                 {isLiveDetection
                   ? `Live active · Voice ${isVoiceEnabled ? 'ON 🔊' : 'OFF 🔇'}`
                   : 'Tap ▶ Start Live for continuous feedback'}
+              </Text>
+              <Text style={styles.privacyNote}>
+                While live, a camera frame is sent to the analysis server about once a second.
+                Frames are analyzed and not saved.
               </Text>
               {liveError ? <Text style={styles.liveErrorText}>⚠ {liveError}</Text> : null}
             </View>
@@ -701,9 +710,8 @@ const PoseCorrectorScreen = ({ route }) => {
 
         {/* Backend Connection */}
         <View style={styles.noteCard}>
-          <Text style={styles.noteTitle}>Backend Connection</Text>
+          <Text style={styles.noteTitle}>Server Connection</Text>
           <Text style={styles.noteBody}>API: {apiUrl}</Text>
-          <Text style={styles.noteBody}>Ensure phone + laptop are on the same Wi-Fi network.</Text>
           <TouchableOpacity style={styles.healthButton} onPress={testBackendConnection} activeOpacity={0.8}>
             <Text style={styles.healthButtonText}>Test Backend Connection</Text>
           </TouchableOpacity>
@@ -796,6 +804,7 @@ const styles = StyleSheet.create({
   voiceToggleText: { fontSize: 20 },
   liveStatusText: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
   liveErrorText: { ...typography.caption, color: '#B71C1C', marginTop: 4 },
+  privacyNote: { ...typography.caption, color: colors.textMuted, marginTop: 4, fontSize: 11 },
   primaryButton: {
     flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.md,
     paddingVertical: spacing.sm, justifyContent: 'center', alignItems: 'center',
@@ -849,6 +858,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm, alignItems: 'center',
   },
   healthButtonText: { ...typography.bodySmall, color: colors.primary, fontWeight: '700' },
+  permissionButton: { flex: 0, marginTop: spacing.md, paddingHorizontal: spacing.lg },
   permissionTitle: { ...typography.headerSmall, color: colors.text, marginBottom: spacing.sm },
   helperText: { ...typography.bodySmall, color: colors.textLight, textAlign: 'center', marginTop: spacing.sm },
 });

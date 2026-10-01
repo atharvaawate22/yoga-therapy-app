@@ -2,12 +2,12 @@
  * PoseDetailScreen - Full pose assistance with image + step-by-step instructions
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles } from '../theme/theme';
 import ExperienceBadge from '../components/ExperienceBadge';
-import { resolveImageSource } from '../utils/imageUtils';
+import PoseImage from '../components/PoseImage';
 import { getFavoriteIds, toggleFavorite } from '../data/userStorage';
 
 const PoseDetailScreen = ({ route, navigation }) => {
@@ -24,14 +24,12 @@ const PoseDetailScreen = ({ route, navigation }) => {
     setIsFavorite(next);
   };
 
-  const imgSource = resolveImageSource(image);
-
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero Image */}
         <View style={styles.heroContainer}>
-          <Image source={imgSource} style={styles.heroImage} resizeMode="cover" />
+          <PoseImage poseId={id} image={image} style={styles.heroImage} iconSize={88} />
           <View style={styles.heroOverlay} />
           <TouchableOpacity
             style={styles.favoriteBtn}
@@ -146,7 +144,10 @@ const PoseDetailScreen = ({ route, navigation }) => {
           {/* Try Pose Corrector Button */}
           <TouchableOpacity
             style={styles.correctorBtn}
-            onPress={() => navigation.navigate('PoseCorrector')}
+            onPress={() => navigation.navigate('PoseCorrector', {
+              expectedPoseId: id,
+              expectedPoseName: name,
+            })}
             activeOpacity={0.85}
           >
             <View style={styles.correctorBtnIconBox}>

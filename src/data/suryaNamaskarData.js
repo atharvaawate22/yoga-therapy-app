@@ -57,7 +57,10 @@ const suryaNamaskarSteps = [
   {
     step: 5,
     name: "Plank Pose",
-    sanskritName: "Dandasana",
+    // Kumbhakasana is plank; Dandasana is the seated Staff Pose. The
+    // classifier label stays "dandasana" (see expectedPoseId) because the
+    // training data used that folder name for plank.
+    sanskritName: "Kumbhakasana",
     description: "Step left foot back to plank, body in a straight line from head to heels.",
     duration: 5,
     image: getPoseImage("plank_pose"),

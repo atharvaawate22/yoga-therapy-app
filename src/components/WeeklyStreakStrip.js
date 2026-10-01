@@ -1,5 +1,5 @@
 /**
- * WeeklyStreakStrip - Mon-Sun (rolling 7-day) practice strip with a streak flame.
+ * WeeklyStreakStrip - Rolling last-7-days practice strip (today last) with a streak flame.
  * Consumes `last7Days` / `currentStreakDays` from getPracticeStats().
  */
 import React from 'react';

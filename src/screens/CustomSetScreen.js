@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Image
+  View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import { colors, typography, spacing, borderRadius, shadows, screenStyles } from
 import { getAllPoses } from '../data/yogaData';
 import { getCustomSets, saveCustomSet, deleteCustomSet, updateCustomSet } from '../data/userStorage';
 import ExperienceBadge from '../components/ExperienceBadge';
-import { resolveImageSource } from '../utils/imageUtils';
+import PoseImage from '../components/PoseImage';
 
 const CustomSetScreen = ({ navigation }) => {
   const [mode, setMode] = useState('list'); // 'list' | 'edit' (edit covers create too)
@@ -54,7 +54,7 @@ const CustomSetScreen = ({ navigation }) => {
   const startEdit = (set) => {
     setEditingId(set.id);
     setSetName(set.name);
-    setSelectedPoses((set.poses || []).map(p => p.id));
+    setSelectedPoses(set.poseIds || []);
     setMode('edit');
   };
 
@@ -67,14 +67,12 @@ const CustomSetScreen = ({ navigation }) => {
       Alert.alert('Select Poses', 'Please select at least one pose.');
       return;
     }
-    // Map ids → poses in the user's chosen order
-    const poses = selectedPoses
-      .map(id => allPoses.find(p => p.id === id))
-      .filter(Boolean);
+    // Ids only, in the user's chosen order; poses are resolved on load.
+    const poseIds = selectedPoses.filter(id => allPoses.some(p => p.id === id));
     if (editingId) {
-      await updateCustomSet(editingId, { name: setName.trim(), poses });
+      await updateCustomSet(editingId, { name: setName.trim(), poseIds });
     } else {
-      await saveCustomSet({ name: setName.trim(), poses });
+      await saveCustomSet({ name: setName.trim(), poseIds });
     }
     setSetName('');
     setSelectedPoses([]);
@@ -155,7 +153,6 @@ const CustomSetScreen = ({ navigation }) => {
           </Text>
           {allPoses.map(pose => {
             const selected = selectedPoses.includes(pose.id);
-            const imgSrc = resolveImageSource(pose.image);
             return (
               <TouchableOpacity
                 key={pose.id}
@@ -163,7 +160,7 @@ const CustomSetScreen = ({ navigation }) => {
                 onPress={() => togglePose(pose.id)}
                 activeOpacity={0.8}
               >
-                <Image source={imgSrc} style={styles.poseThumb} />
+                <PoseImage poseId={pose.id} image={pose.image} style={styles.poseThumb} iconSize={22} />
                 <View style={styles.poseInfo}>
                   <Text style={styles.poseName}>{pose.name}</Text>
                   <ExperienceBadge level={pose.difficulty} small />

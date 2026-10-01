@@ -10,17 +10,19 @@
  * Voice cues via expo-speech, session saved to history on finish/early end.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import { savePracticeSession, parseDurationSec, formatDuration } from '../data/sessionStorage';
 import { getVoiceEnabled } from '../data/userStorage';
-import { resolveImageSource } from '../utils/imageUtils';
+import PoseImage from '../components/PoseImage';
 
 const PREP_SECONDS = 8;
+const KEEP_AWAKE_TAG = 'practice-session';
 
 const PracticeSessionScreen = ({ route, navigation }) => {
   const { title = 'Practice', poses = [], sourceType = 'routine' } = route.params || {};
@@ -35,7 +37,9 @@ const PracticeSessionScreen = ({ route, navigation }) => {
 
   const elapsedRef = useRef(0);       // active (unpaused) seconds
   const secondsRef = useRef(PREP_SECONDS); // countdown source of truth (state is the render copy)
-  const completedRef = useRef(0);     // mirrors posesCompleted for unmount-safe saves
+  // Indices of poses held to the end. A set, so going back with Prev and
+  // repeating a pose can't count it twice (which showed e.g. "6/5 poses").
+  const completedRef = useRef(new Set());
   const savedRef = useRef(false);     // guard against double-saving
   const voiceRef = useRef(true);
 
@@ -49,12 +53,12 @@ const PracticeSessionScreen = ({ route, navigation }) => {
   }, []);
 
   const saveSession = useCallback(async () => {
-    if (savedRef.current || completedRef.current === 0) return null;
+    if (savedRef.current || completedRef.current.size === 0) return null;
     savedRef.current = true;
     return savePracticeSession({
       type: sourceType,
       title,
-      posesCompleted: completedRef.current,
+      posesCompleted: completedRef.current.size,
       poseCount: poses.length,
       durationSec: elapsedRef.current,
     });
@@ -93,8 +97,8 @@ const PracticeSessionScreen = ({ route, navigation }) => {
         return;
       }
       // hold finished → pose complete
-      completedRef.current += 1;
-      setPosesCompleted(completedRef.current);
+      completedRef.current.add(poseIndex);
+      setPosesCompleted(completedRef.current.size);
       if (poseIndex < poses.length - 1) {
         secondsRef.current = PREP_SECONDS;
         setSecondsLeft(PREP_SECONDS);
@@ -110,6 +114,17 @@ const PracticeSessionScreen = ({ route, navigation }) => {
     }, 1000);
     return () => clearInterval(timer);
   }, [phase, isPaused, poseIndex, holdSeconds, speak, saveSession, poses.length]);
+
+  // The user holds poses without touching the phone; keep the screen on
+  // until the session ends.
+  useEffect(() => {
+    if (phase === 'done') {
+      deactivateKeepAwake(KEEP_AWAKE_TAG);
+      return undefined;
+    }
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    return () => { deactivateKeepAwake(KEEP_AWAKE_TAG); };
+  }, [phase === 'done']); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup: stop speech, save partial session if user leaves mid-way
   useEffect(() => {
@@ -167,14 +182,18 @@ const PracticeSessionScreen = ({ route, navigation }) => {
 
   // ── Completion summary ──
   if (phase === 'done') {
+    // Skipping through every pose isn't a completed session and isn't saved.
+    const nothingCompleted = posesCompleted === 0;
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.centered}>
           <LinearGradient colors={gradients.streak} style={styles.doneIconBox}>
-            <Ionicons name="trophy" size={32} color="#FFFFFF" />
+            <Ionicons name={nothingCompleted ? 'play-skip-forward' : 'trophy'} size={32} color="#FFFFFF" />
           </LinearGradient>
-          <Text style={styles.doneTitle}>Session Complete!</Text>
-          <Text style={styles.doneSubtitle}>{title}</Text>
+          <Text style={styles.doneTitle}>{nothingCompleted ? 'Session Ended' : 'Session Complete!'}</Text>
+          <Text style={styles.doneSubtitle}>
+            {nothingCompleted ? `${title} · no poses were held to the end, so nothing was saved` : title}
+          </Text>
 
           <View style={styles.summaryCard}>
             <View style={styles.summaryItem}>
@@ -227,7 +246,7 @@ const PracticeSessionScreen = ({ route, navigation }) => {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-          <Image source={resolveImageSource(pose.image)} style={styles.poseImage} resizeMode="cover" />
+          <PoseImage poseId={pose.id} image={pose.image} style={styles.poseImage} iconSize={72} />
 
           {/* Timer */}
           <View style={[styles.timerBox, isPrep ? styles.timerBoxPrep : styles.timerBoxHold]}>

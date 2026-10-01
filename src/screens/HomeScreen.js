@@ -2,16 +2,16 @@
  * HomeScreen - Main screen with prominent Live Pose Corrector + all features
  */
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
-import yogaData, { getAllPoses } from '../data/yogaData';
+import yogaData, { getAllPoses, posesForExperience } from '../data/yogaData';
 import { getUserProfile, getFavoriteIds } from '../data/userStorage';
 import { getPracticeStats } from '../data/sessionStorage';
-import { resolveImageSource } from '../utils/imageUtils';
+import PoseImage from '../components/PoseImage';
 import ProblemCard from '../components/ProblemCard';
 import ExperienceBadge from '../components/ExperienceBadge';
 import WeeklyStreakStrip from '../components/WeeklyStreakStrip';
@@ -33,8 +33,12 @@ const HomeScreen = ({ navigation }) => {
     }, [])
   );
 
+  // Same experience filter as the Health Scanner, so a beginner doesn't get
+  // intermediate inversions (e.g. Shoulder Stand for Headache) from Home.
+  const posesFor = (problemName) => posesForExperience(yogaData[problemName], profile?.experience);
+
   const handleProblemPress = (problemName) => {
-    navigation.navigate('PoseScreen', { problemName, poses: yogaData[problemName] });
+    navigation.navigate('PoseScreen', { problemName, poses: posesFor(problemName) });
   };
 
   const greeting = () => {
@@ -194,7 +198,7 @@ const HomeScreen = ({ navigation }) => {
                   onPress={() => navigation.navigate('PoseDetail', { pose: p })}
                   activeOpacity={0.85}
                 >
-                  <Image source={resolveImageSource(p.image)} style={styles.favImage} />
+                  <PoseImage poseId={p.id} image={p.image} style={styles.favImage} iconSize={32} />
                   <Text style={styles.favName} numberOfLines={1}>{p.name}</Text>
                   <Text style={styles.favDuration}>{p.duration}</Text>
                 </TouchableOpacity>
@@ -215,7 +219,7 @@ const HomeScreen = ({ navigation }) => {
             <ProblemCard
               key={index}
               problemName={problemName}
-              poseCount={yogaData[problemName].length}
+              poseCount={posesFor(problemName).length}
               onPress={() => handleProblemPress(problemName)}
             />
           ))}

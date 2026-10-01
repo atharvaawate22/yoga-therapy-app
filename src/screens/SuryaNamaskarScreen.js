@@ -1,34 +1,22 @@
 /**
  * SuryaNamaskarScreen - 12-step sequence with round selection
  */
-import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows, screenStyles, gradients } from '../theme/theme';
 import suryaNamaskarSteps from '../data/suryaNamaskarData';
 import RoundSelector from '../components/RoundSelector';
-import { resolveImageSource } from '../utils/imageUtils';
-import { hasRealPoseImage, POSE_ICON_FALLBACK } from '../data/poseImages';
+import PoseImage from '../components/PoseImage';
 import { savePracticeSession, formatDuration } from '../data/sessionStorage';
 
-// Small thumbnail for the preview list -- a photo when one genuinely
-// matches the pose, otherwise a themed icon rather than an unrelated stock
-// photo passed off as the real thing.
-const PoseThumb = ({ poseId, source, iconSize, style }) => {
-  if (hasRealPoseImage(poseId)) {
-    return <Image source={source} style={style} />;
-  }
-  const icon = POSE_ICON_FALLBACK[poseId] || { family: 'mci', name: 'yoga' };
-  return (
-    <View style={[style, { backgroundColor: colors.cardAlt, justifyContent: 'center', alignItems: 'center' }]}>
-      {icon.family === 'ion'
-        ? <Ionicons name={icon.name} size={iconSize} color={colors.primary} />
-        : <MaterialCommunityIcons name={icon.name} size={iconSize} color={colors.primary} />}
-    </View>
-  );
-};
+const STEPS_PER_ROUND = suryaNamaskarSteps.length;
+// Estimate for the round picker: each step's hold plus a few seconds to move
+// into it. (The practice itself is stepped manually with Next.)
+const TRANSITION_SEC = 3;
+const SECONDS_PER_ROUND = suryaNamaskarSteps.reduce((sum, s) => sum + s.duration + TRANSITION_SEC, 0);
 
 const SuryaNamaskarScreen = ({ navigation }) => {
   const [rounds, setRounds] = useState(3);
@@ -36,34 +24,72 @@ const SuryaNamaskarScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
   const startTimeRef = useRef(null);
+  // "round-step" keys the user moved past with Next. Saved counts come from
+  // this rather than assuming every planned step was done.
+  const completedStepsRef = useRef(new Set());
+  const roundsRef = useRef(rounds);
+  const savedRef = useRef(false);
+  roundsRef.current = rounds;
 
   const step = suryaNamaskarSteps[currentStep];
-  const imgSrc = resolveImageSource(step.image);
+
+  // Saves at most once per practice; nothing if no step was completed.
+  const saveSession = useCallback(async () => {
+    if (savedRef.current || !startTimeRef.current || completedStepsRef.current.size === 0) return null;
+    savedRef.current = true;
+    const durationSec = Math.round((Date.now() - startTimeRef.current) / 1000);
+    await savePracticeSession({
+      type: 'surya',
+      title: 'Surya Namaskar',
+      posesCompleted: completedStepsRef.current.size,
+      poseCount: roundsRef.current * STEPS_PER_ROUND,
+      durationSec,
+    });
+    return durationSec;
+  }, []);
+
+  // Leaving mid-practice (back button/gesture) keeps the steps done so far.
+  useEffect(() => () => { saveSession(); }, [saveSession]);
 
   const handleStart = () => {
     startTimeRef.current = Date.now();
+    completedStepsRef.current = new Set();
+    savedRef.current = false;
     setStarted(true);
   };
 
   const resetPractice = () => {
+    startTimeRef.current = null;
     setStarted(false);
     setCurrentStep(0);
     setCurrentRound(1);
   };
 
+  const handleStop = () => {
+    const done = completedStepsRef.current.size;
+    Alert.alert(
+      'Stop Practice?',
+      done > 0
+        ? `You've completed ${done} step${done !== 1 ? 's' : ''}. They'll be saved to your progress.`
+        : 'No steps completed yet, so nothing will be saved.',
+      [
+        { text: 'Keep Going', style: 'cancel' },
+        {
+          text: 'Stop', style: 'destructive',
+          onPress: async () => { await saveSession(); resetPractice(); },
+        },
+      ]
+    );
+  };
+
   const handleComplete = async () => {
-    const durationSec = Math.round((Date.now() - startTimeRef.current) / 1000);
-    await savePracticeSession({
-      type: 'surya',
-      title: 'Surya Namaskar',
-      posesCompleted: rounds * suryaNamaskarSteps.length,
-      poseCount: rounds * suryaNamaskarSteps.length,
-      durationSec,
-    });
+    // A second tap on Done while the first save is running would save twice.
+    if (savedRef.current) return;
+    const durationSec = await saveSession();
     resetPractice();
     Alert.alert(
       'Practice Complete! 🎉',
-      `${rounds} round${rounds > 1 ? 's' : ''} of Surya Namaskar in ${formatDuration(durationSec)}.\nSaved to your progress.`,
+      `${rounds} round${rounds > 1 ? 's' : ''} of Surya Namaskar in ${formatDuration(durationSec || 0)}.\nSaved to your progress.`,
       [
         { text: 'View Progress', onPress: () => navigation.navigate('MainTabs', { screen: 'History' }) },
         { text: 'Done', style: 'cancel' },
@@ -72,6 +98,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
   };
 
   const handleNext = () => {
+    completedStepsRef.current.add(`${currentRound}-${currentStep}`);
     if (currentStep < suryaNamaskarSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else if (currentRound < rounds) {
@@ -93,8 +120,8 @@ const SuryaNamaskarScreen = ({ navigation }) => {
   };
 
   const isLastStep = currentStep === suryaNamaskarSteps.length - 1 && currentRound === rounds;
-  const totalSteps = rounds * 12;
-  const completedSteps = (currentRound - 1) * 12 + currentStep;
+  const totalSteps = rounds * STEPS_PER_ROUND;
+  const completedSteps = (currentRound - 1) * STEPS_PER_ROUND + currentStep;
   const progressPct = (completedSteps / totalSteps) * 100;
 
   if (!started) {
@@ -109,19 +136,23 @@ const SuryaNamaskarScreen = ({ navigation }) => {
             <Text style={styles.subtitle}>Sun Salutation — 12-step sacred sequence</Text>
           </View>
 
-          <RoundSelector rounds={rounds} setRounds={setRounds} />
+          <RoundSelector
+            rounds={rounds}
+            setRounds={setRounds}
+            stepsPerRound={STEPS_PER_ROUND}
+            secondsPerRound={SECONDS_PER_ROUND}
+          />
 
           {/* Preview Steps */}
           <View style={styles.previewSection}>
             <Text style={styles.sectionLabel}>12-STEP SEQUENCE</Text>
             {suryaNamaskarSteps.map((s, i) => {
-              const sImg = resolveImageSource(s.image);
               return (
                 <View key={i} style={styles.previewRow}>
                   <View style={styles.stepBadge}>
                     <Text style={styles.stepBadgeText}>{s.step}</Text>
                   </View>
-                  <PoseThumb poseId={s.imageId} source={sImg} iconSize={22} style={styles.previewThumb} />
+                  <PoseImage poseId={s.imageId} image={s.image} iconSize={22} style={styles.previewThumb} />
                   <View style={styles.previewInfo}>
                     <Text style={styles.previewName}>{s.name}</Text>
                     <Text style={styles.previewSanskrit}>{s.sanskritName}</Text>
@@ -154,7 +185,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
         </Text>
 
         {/* Step Image */}
-        <PoseThumb poseId={step.imageId} source={imgSrc} iconSize={72} style={styles.stepImage} />
+        <PoseImage poseId={step.imageId} image={step.image} iconSize={72} style={styles.stepImage} />
 
         {/* Step Info */}
         <View style={styles.stepInfo}>
@@ -201,7 +232,7 @@ const SuryaNamaskarScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.stopBtn}
-            onPress={resetPractice}
+            onPress={handleStop}
             activeOpacity={0.8}
           >
             <Text style={styles.stopBtnText}>Stop</Text>

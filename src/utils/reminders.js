@@ -37,40 +37,46 @@ const ensureAndroidChannel = async () => {
 
 /**
  * Apply a reminder choice (one of REMINDER_OPTIONS keys).
- * Returns { ok: boolean, reason?: 'permission-denied' }
+ * Returns { ok: boolean, reason?: 'permission-denied' | 'error' }
+ *
+ * If permission is denied, the previous reminder is left exactly as it was
+ * (still scheduled and still saved), so callers can simply restore their UI.
  */
 export const applyReminderSetting = async (key) => {
   const option = REMINDER_OPTIONS.find(o => o.key === key) || REMINDER_OPTIONS[0];
+  try {
+    if (option.key === 'off') {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      await AsyncStorage.setItem(REMINDER_KEY, JSON.stringify({ key: 'off' }));
+      return { ok: true };
+    }
 
-  // Always clear previous schedule first
-  await Notifications.cancelAllScheduledNotificationsAsync();
+    // Check permission before touching the existing schedule: cancelling
+    // first meant a denial silently removed a reminder the UI still showed.
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      return { ok: false, reason: 'permission-denied' };
+    }
 
-  if (option.key === 'off') {
-    await AsyncStorage.setItem(REMINDER_KEY, JSON.stringify({ key: 'off' }));
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    await ensureAndroidChannel();
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Time for yoga 🧘',
+        body: 'A few minutes of practice keeps your streak alive. Roll out your mat!',
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: option.hour,
+        minute: option.minute,
+        channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
+      },
+    });
+
+    await AsyncStorage.setItem(REMINDER_KEY, JSON.stringify({ key: option.key }));
     return { ok: true };
+  } catch {
+    return { ok: false, reason: 'error' };
   }
-
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') {
-    await AsyncStorage.setItem(REMINDER_KEY, JSON.stringify({ key: 'off' }));
-    return { ok: false, reason: 'permission-denied' };
-  }
-
-  await ensureAndroidChannel();
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Time for yoga 🧘',
-      body: 'A few minutes of practice keeps your streak alive. Roll out your mat!',
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: option.hour,
-      minute: option.minute,
-      channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
-    },
-  });
-
-  await AsyncStorage.setItem(REMINDER_KEY, JSON.stringify({ key: option.key }));
-  return { ok: true };
 };

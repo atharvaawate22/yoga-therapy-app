@@ -1,11 +1,11 @@
 /**
- * RoundSelector - Animated round counter for Surya Namaskar
+ * RoundSelector - Round counter for Surya Namaskar
  */
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, borderRadius, spacing, typography, shadows } from '../theme/theme';
 
-const RoundSelector = ({ rounds, setRounds, min = 1, max = 12 }) => {
+const RoundSelector = ({ rounds, setRounds, stepsPerRound, secondsPerRound, min = 1, max = 12 }) => {
   const decrease = () => setRounds(Math.max(min, rounds - 1));
   const increase = () => setRounds(Math.min(max, rounds + 1));
 
@@ -35,7 +35,7 @@ const RoundSelector = ({ rounds, setRounds, min = 1, max = 12 }) => {
         </TouchableOpacity>
       </View>
       <Text style={styles.hint}>
-        ≈ {Math.round(rounds * 1.5)} min • {rounds * 12} poses total
+        ≈ {Math.max(1, Math.round((rounds * secondsPerRound) / 60))} min • {rounds * stepsPerRound} poses total
       </Text>
     </View>
   );

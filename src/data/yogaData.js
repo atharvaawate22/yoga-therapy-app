@@ -413,6 +413,17 @@ Object.keys(yogaData).forEach(cat => {
 
 export default yogaData;
 
+// A user sees poses at or below their level: beginners get beginner poses,
+// intermediates add intermediate ones, experts see everything.
+const LEVEL_RANK = { beginner: 0, intermediate: 1, advanced: 2, expert: 2 };
+
+/** Filter a pose list to the user's experience level (unknown level = no filter). */
+export const posesForExperience = (poses, experience) => {
+  const maxRank = LEVEL_RANK[experience];
+  if (maxRank === undefined) return poses;
+  return poses.filter(p => (LEVEL_RANK[p.difficulty] ?? 0) <= maxRank);
+};
+
 export const getAllPoses = () => {
   const seen = new Set();
   const all = [];

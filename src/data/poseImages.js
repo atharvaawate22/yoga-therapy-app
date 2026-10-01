@@ -1,9 +1,12 @@
 /**
- * Pose Images Registry — 18 Allowed Yoga Poses Only
- * Local AI-generated images for 6 poses; curated Unsplash URLs for the rest.
+ * Pose images: bundled photos only.
+ *
+ * Poses without a bundled photo get an icon placeholder (see PoseImage)
+ * instead of a stock photo. The remote Unsplash URLs used before were checked
+ * and none showed the pose it was labelled as (two were also 404s), and they
+ * needed a network connection to show anything at all.
  */
 
-// Local high-quality AI-generated images
 const localImages = {
   downward_dog:      require('../../assets/poses/downward_dog.png'),
   low_lunge:         require('../../assets/poses/low_lunge.png'),
@@ -15,84 +18,23 @@ const localImages = {
   tree_pose:         require('../../assets/poses/tree_pose.png'),
   warrior_pose:      require('../../assets/poses/warrior_pose.png'),
   // Ashwa Sanchalanasana (Equestrian Pose, Surya Namaskar steps 4 & 9) is
-  // visually the same lunge shape as Anjaneyasana -- reuse that photo
-  // rather than falling through to an unrelated generic stock image.
+  // visually the same lunge shape as Anjaneyasana, so reuse that photo.
   equestrian_pose:   require('../../assets/poses/low_lunge.png'),
 };
 
-/**
- * Surya-Namaskar-only steps with no matching photo (and no visually close
- * enough local/remote one to reuse honestly). Rather than show an unrelated
- * stock photo as if it depicted the pose, the screen renders this icon
- * instead -- see hasRealPoseImage() / POSE_ICON_FALLBACK below.
- */
-export const POSE_ICON_FALLBACK = {
+// Placeholder icons for poses without a photo: { family: 'ion' | 'mci', name }
+const POSE_ICONS = {
   prayer_pose: { family: 'mci', name: 'hands-pray' },
   raised_arms: { family: 'mci', name: 'human-handsup' },
   plank_pose: { family: 'mci', name: 'yoga' },
   eight_limbed: { family: 'mci', name: 'human-handsdown' },
 };
+const DEFAULT_ICON = { family: 'mci', name: 'yoga' };
 
-/**
- * Remote images — each URL specifically chosen to match the exact pose.
- * Curated Unsplash photos showing the correct asana.
- */
-const remoteImages = {
-  // Halasana — Plow Pose
-  plow_pose:
-    'https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?w=600&h=400&fit=crop&crop=center',
+/** Bundled photo for a pose (a require() handle), or null if there isn't one. */
+export const getPoseImage = (poseId) => localImages[poseId] || null;
 
-  // Malasana — Garland / Yogi Squat
-  garland_pose:
-    'https://images.unsplash.com/photo-1552196563-55cd4e45efb3?w=600&h=400&fit=crop&crop=center',
-
-  // Navasana — Boat Pose
-  boat_pose:
-    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop&crop=top',
-
-  // Paschimottanasana — Seated Forward Bend
-  seated_forward_bend:
-    'https://images.unsplash.com/photo-1510894347713-fc3ed6fdf539?w=600&h=400&fit=crop&crop=center',
-
-  // Salamba Sarvangasana — Shoulder Stand
-  shoulder_stand:
-    'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&h=400&fit=crop&crop=center',
-
-  // Setu Bandha Sarvangasana — Bridge Pose
-  bridge_pose:
-    'https://images.unsplash.com/photo-1573590330530-0ee87e5a8609?w=600&h=400&fit=crop&crop=center',
-
-  // Trikonasana — Triangle Pose
-  triangle_pose:
-    'https://images.unsplash.com/photo-1575052814086-f385e2e2ad1b?w=600&h=400&fit=crop&crop=center',
-
-  // Urdhva Mukha Svanasana — Upward-Facing Dog
-  upward_dog:
-    'https://images.unsplash.com/photo-1601925228689-f5a5bdc76f89?w=600&h=400&fit=crop&crop=center',
-
-  // Utkatasana — Chair Pose
-  chair_pose:
-    'https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?w=600&h=400&fit=crop&crop=top',
-
-  // Uttanasana — Standing Forward Fold
-  forward_bend:
-    'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop&crop=top',
-
-  // Note: warrior_pose (Virabhadrasana II), tree_pose (Vrksasana) and
-  // cobra_pose (Bhujangasana) are now served from local images above.
-};
-
-// Fallback image
-const FALLBACK = 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop&crop=center';
-
-export const getPoseImage = (poseId) => {
-  if (localImages[poseId]) return localImages[poseId];
-  if (remoteImages[poseId]) return { uri: remoteImages[poseId] };
-  return { uri: FALLBACK };
-};
-
-/** Whether poseId has a real, pose-specific photo (vs. the generic fallback). */
-export const hasRealPoseImage = (poseId) =>
-  Boolean(localImages[poseId] || remoteImages[poseId]);
+/** Placeholder icon for a pose without a photo. */
+export const getPoseIcon = (poseId) => POSE_ICONS[poseId] || DEFAULT_ICON;
 
 export default getPoseImage;
