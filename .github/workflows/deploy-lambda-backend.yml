@@ -19,6 +19,8 @@ env:
   # rates to bound the Lambda bill. One live session sends about 1 req/s.
   THROTTLE_RATE_LIMIT: "10"
   THROTTLE_BURST_LIMIT: "20"
+  LAMBDA_TIMEOUT: "30"
+  LAMBDA_MEMORY_MB: "2048"
 
 jobs:
   deploy:
@@ -46,15 +48,28 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1 \
+            || aws ecr create-repository --repository-name "$ECR_REPOSITORY" --no-cli-pager
+
+      - name: Build image
         id: build
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
           docker build -f backend/Dockerfile.lambda -t "$IMAGE_URI" backend
-          docker push "$IMAGE_URI"
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      # Loads the real models inside the image and runs one analysis. Unit
+      # tests stub the models, so this is what catches a broken runtime
+      # dependency before it reaches production.
+      - name: Smoke-test image
+        run: docker run --rm -i --entrypoint python "${{ steps.build.outputs.image_uri }}" - < backend/smoke_test_image.py
+
+      - name: Push image
+        run: docker push "${{ steps.build.outputs.image_uri }}"
 
       - name: Create or update Lambda function
         run: |
@@ -65,6 +80,14 @@ jobs:
               --image-uri "${{ steps.build.outputs.image_uri }}" \
               --no-cli-pager
             aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
+            # update-function-code leaves settings alone; keep them matching
+            # what this workflow declares.
+            aws lambda update-function-configuration \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              --timeout "$LAMBDA_TIMEOUT" \
+              --memory-size "$LAMBDA_MEMORY_MB" \
+              --no-cli-pager >/dev/null
+            aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
           else
             echo "Creating new function..."
             aws lambda create-function \
@@ -72,8 +95,8 @@ jobs:
               --package-type Image \
               --code ImageUri="${{ steps.build.outputs.image_uri }}" \
               --role "$LAMBDA_ROLE_ARN" \
-              --timeout 30 \
-              --memory-size 2048 \
+              --timeout "$LAMBDA_TIMEOUT" \
+              --memory-size "$LAMBDA_MEMORY_MB" \
               --no-cli-pager
             aws lambda wait function-active --function-name "$LAMBDA_FUNCTION_NAME"
           fi
@@ -90,22 +113,10 @@ jobs:
             echo "Throttled stage '$STAGE': rate=$THROTTLE_RATE_LIMIT/s burst=$THROTTLE_BURST_LIMIT"
           done
 
-      - name: Ensure public Function URL exists
+      # The app calls API Gateway, not a Lambda Function URL (this account
+      # blocks anonymous Function URL invocation; see src/config/poseApi.js).
+      - name: Summary
         run: |
-          if ! aws lambda get-function-url-config --function-name "$LAMBDA_FUNCTION_NAME" >/dev/null 2>&1; then
-            aws lambda create-function-url-config \
-              --function-name "$LAMBDA_FUNCTION_NAME" \
-              --auth-type NONE \
-              --no-cli-pager
-            aws lambda add-permission \
-              --function-name "$LAMBDA_FUNCTION_NAME" \
-              --statement-id FunctionURLAllowPublicAccess \
-              --action lambda:InvokeFunctionUrl \
-              --principal "*" \
-              --function-url-auth-type NONE \
-              --no-cli-pager
-          fi
-          URL=$(aws lambda get-function-url-config --function-name "$LAMBDA_FUNCTION_NAME" --query 'FunctionUrl' --output text)
-          echo "Function URL: $URL"
           echo "### Lambda backend deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "URL: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image: ${{ steps.build.outputs.image_uri }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "API: https://$API_GATEWAY_ID.execute-api.$AWS_REGION.amazonaws.com" >> "$GITHUB_STEP_SUMMARY"

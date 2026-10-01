@@ -12,10 +12,20 @@ on:
       - ".github/workflows/deploy-lambda-backend.yml"
       - ".github/workflows/publish-latest-apk.yml"
       - ".github/workflows/backend-tests.yml"
+      - ".github/workflows/app-tests.yml"
+      - "**/__tests__/**"
+      - "jest.setup.js"
   workflow_dispatch: {}
 
 permissions:
   contents: write # needed to publish/update the "latest-preview" GitHub Release
+
+# One build at a time: two overlapping runs could otherwise publish their APKs
+# to the rolling release out of order. A newer push waits rather than cancels,
+# since a cancelled run may already have spent an EAS build.
+concurrency:
+  group: eas-build-android
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -51,7 +61,11 @@ jobs:
         id: build
         env:
           EXPO_DEBUG: "1"
-        run: eas build --platform android --profile preview --non-interactive --wait
+        # --json prints the finished build(s) on stdout (logs go to stderr),
+        # so later steps use *this* build rather than "the latest one on EAS".
+        run: |
+          eas build --platform android --profile preview --non-interactive --wait --json > eas-build.json
+          cat eas-build.json
 
       - name: Dump build details on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -68,10 +82,11 @@ jobs:
       - name: Fetch APK download URL
         id: apk
         run: |
-          URL=$(eas build:list --platform android --limit 1 --non-interactive --json --status finished | node -e "
-            const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-            const url = data?.[0]?.artifacts?.buildUrl;
-            if (!url) { console.error('No build URL found'); process.exit(1); }
+          URL=$(node -e "
+            const data = JSON.parse(require('fs').readFileSync('eas-build.json', 'utf8'));
+            const build = Array.isArray(data) ? data[0] : data;
+            const url = build?.artifacts?.buildUrl;
+            if (!url) { console.error('No build URL in eas-build.json'); process.exit(1); }
             console.log(url);
           ")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
