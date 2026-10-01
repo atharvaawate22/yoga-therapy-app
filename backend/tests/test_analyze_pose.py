@@ -71,9 +71,9 @@ def test_warrior_pose_reports_distance_metrics(
     body = client.post(ANALYZE, json=payload(sample_image_base64)).json()
 
     assert set(body["distances"]) == {
-        "warrior_arm_lateral",
-        "warrior_arm_vertical",
-        "warrior_arm_depth",
+        "warrior_arm_span",
+        "warrior_arm_height_offset",
+        "warrior_wrist_height_diff",
     }
 
 
@@ -314,3 +314,18 @@ def test_oversized_payload_is_rejected(client: TestClient) -> None:
     response = client.post(ANALYZE, json=payload(huge))
 
     assert response.status_code == 422
+
+
+def test_session_vote_history_is_bounded(monkeypatch) -> None:
+    import yoga_pose_engine as engine
+
+    monkeypatch.setattr(engine, "MAX_TRACKED_SESSIONS", 3)
+    for i in range(10):
+        engine._apply_stability(f"s-{i}", "live", "tree_pose")
+
+    assert list(engine._session_predictions) == ["s-7", "s-8", "s-9"]
+
+
+def test_health_does_not_expose_filesystem_paths(client: TestClient) -> None:
+    body = client.get("/health").json()
+    assert not any("path" in key for key in body)

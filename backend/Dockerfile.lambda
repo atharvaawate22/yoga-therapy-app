@@ -1,5 +1,5 @@
 # Lambda container image for the pose-analysis API. Separate from the plain
-# Dockerfile (Render/generic Docker hosts, listens on $PORT via uvicorn) --
+# Dockerfile (Render/generic Docker hosts, uvicorn on $PORT) --
 # this one adds the Lambda Runtime Interface Client to a plain Python base
 # image (the documented alternative to AWS's own base image) and invokes the
 # FastAPI app through Mangum (lambda_handler.py) instead of uvicorn directly.

@@ -4,18 +4,19 @@ The server, the trainer and the evaluator all run keypoint extraction through
 this one class, so resize interpolation and input dtype handling cannot drift
 between them.
 
-TensorFlow is imported lazily inside ``MoveNetRuntime.__init__`` rather than at
-module scope. That keeps ``import utils.movenet`` (and therefore importing the
-FastAPI app) free of a ~600 MB dependency, so the unit tests run without the ML
-runtime installed.
+The interpreter runtime (LiteRT, or TensorFlow as a fallback) is imported
+lazily inside ``MoveNetRuntime.__init__`` rather than at module scope, so
+``import utils.movenet`` (and therefore importing the FastAPI app) needs
+neither, and the unit tests run without an ML runtime installed.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -38,18 +39,38 @@ def ensure_movenet_model(model_path: Path = MOVENET_MODEL_PATH) -> Path:
     return model_path
 
 
+def _load_interpreter_class() -> Any:
+    """The TFLite interpreter class, preferring the standalone LiteRT runtime.
+
+    ``ai-edge-litert`` is a few MB and is all the server needs; importing full
+    TensorFlow for the same interpreter dominated serverless cold starts. The
+    training/eval environment (requirements.txt) has TensorFlow instead, so
+    fall back to it there.
+    """
+    try:
+        from ai_edge_litert.interpreter import Interpreter  # noqa: PLC0415
+
+        return Interpreter
+    except ImportError:
+        import tensorflow as tf  # noqa: PLC0415 - deliberately lazy, see module docstring
+
+        return tf.lite.Interpreter
+
+
 class MoveNetRuntime:
     """Holds the allocated TFLite interpreter. Construct once, reuse forever."""
 
     def __init__(self, model_path: Optional[Path] = None) -> None:
-        import tensorflow as tf  # noqa: PLC0415 - deliberately lazy, see module docstring
-
         resolved = ensure_movenet_model(model_path or MOVENET_MODEL_PATH)
-        self.interpreter = tf.lite.Interpreter(model_path=str(resolved))
+        self.interpreter = _load_interpreter_class()(model_path=str(resolved))
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()[0]
         self.output_details = self.interpreter.get_output_details()[0]
         self.input_size = int(self.input_details["shape"][1])
+        # A TFLite interpreter is not thread-safe, and uvicorn serves sync
+        # endpoints from a thread pool: concurrent set_tensor/invoke calls on
+        # the shared instance could mix up two requests' inputs and outputs.
+        self._lock = threading.Lock()
         logger.info(
             "MoveNet ready (input_size=%d, dtype=%s)",
             self.input_size,
@@ -70,7 +91,8 @@ class MoveNetRuntime:
         expected_dtype = self.input_details["dtype"]
         input_tensor = np.expand_dims(resized.astype(expected_dtype), axis=0)
 
-        self.interpreter.set_tensor(self.input_details["index"], input_tensor)
-        self.interpreter.invoke()
-        output = self.interpreter.get_tensor(self.output_details["index"])
+        with self._lock:
+            self.interpreter.set_tensor(self.input_details["index"], input_tensor)
+            self.interpreter.invoke()
+            output = self.interpreter.get_tensor(self.output_details["index"]).copy()
         return output[0, 0, :, :]

@@ -102,3 +102,32 @@ def test_cat_cow_cues_describe_what_was_measured() -> None:
     cues = engine._generate_corrections("cat_cow", uneven, "beginner")
     assert any("shoulders level" in c for c in cues)
     assert any("hips level" in c for c in cues)
+
+
+def test_rules_skip_keypoints_the_model_did_not_see() -> None:
+    """An out-of-frame ankle must not drive a foot cue."""
+    kp = keypoints({15: (100, 360), 16: (300, 360)})  # feet far apart...
+    kp[15, 2] = kp[16, 2] = 0.05  # ...but barely detected
+    cues = engine._generate_corrections("shoulder_stand", kp, "beginner")
+    assert not any("feet" in c for c in cues)
+
+
+def test_no_praise_when_nothing_could_be_checked() -> None:
+    kp = keypoints()
+    kp[:, 2] = 0.1
+    cues = engine._generate_corrections("tree_pose", kp, "beginner")
+    assert cues == [engine.NOT_VISIBLE_CUE]
+
+
+def test_side_view_downward_dog_is_not_told_to_spread_hands() -> None:
+    """From the side the wrists overlap; hand spacing can't be judged."""
+    side = keypoints({5: (200, 100), 6: (202, 100), 9: (150, 200), 10: (151, 200),
+                      11: (200, 200), 12: (202, 200)})
+    cues = engine._generate_corrections("downward_dog", side, "expert")
+    assert not any("Spread your hands" in c for c in cues)
+
+
+def test_front_view_downward_dog_with_hands_together_is_told_to_spread() -> None:
+    front = keypoints({9: (198, 200), 10: (202, 200)})
+    cues = engine._generate_corrections("downward_dog", front, "beginner")
+    assert any("Spread your hands" in c for c in cues)

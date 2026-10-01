@@ -34,6 +34,7 @@ __all__ = [
     "train_classifier",
     "save_classifier",
     "load_classifier",
+    "NumpyClassifier",
     "load_labels",
 ]
 
@@ -185,6 +186,69 @@ def load_classifier(model_path: Path = CLASSIFIER_MODEL_PATH) -> Any:
     import tensorflow as tf  # noqa: PLC0415
 
     return tf.keras.models.load_model(model_path, compile=False)
+
+
+class NumpyClassifier:
+    """Inference-only copy of the MLP head that needs just numpy and h5py.
+
+    The server used to import all of TensorFlow (~600 MB) to run a ~4k
+    parameter Dense stack, which dominated Lambda cold starts past API
+    Gateway's 30s limit. This reads the same ``.keras`` file -- a zip of
+    ``config.json`` plus ``model.weights.h5`` -- so training output is served
+    as-is, with no export step to forget. Dropout is a no-op at inference.
+
+    ``predict`` mirrors ``keras.Model.predict``'s signature so callers can use
+    either interchangeably.
+    """
+
+    _ACTIVATIONS = {
+        "linear": lambda x: x,
+        "relu": lambda x: np.maximum(x, 0.0),
+        "softmax": lambda x: (
+            np.exp(x - x.max(axis=-1, keepdims=True))
+            / np.exp(x - x.max(axis=-1, keepdims=True)).sum(axis=-1, keepdims=True)
+        ),
+    }
+
+    def __init__(self, layers: List[Tuple[np.ndarray, np.ndarray, str]]) -> None:
+        self.layers = layers
+
+    @classmethod
+    def from_keras_file(cls, model_path: Path = CLASSIFIER_MODEL_PATH) -> "NumpyClassifier":
+        import io  # noqa: PLC0415
+        import zipfile  # noqa: PLC0415
+
+        import h5py  # noqa: PLC0415
+
+        with zipfile.ZipFile(model_path) as archive:
+            config = json.loads(archive.read("config.json"))
+            weights = archive.read("model.weights.h5")
+
+        layers: List[Tuple[np.ndarray, np.ndarray, str]] = []
+        with h5py.File(io.BytesIO(weights), "r") as h5:
+            for layer in config["config"]["layers"]:
+                kind = layer["class_name"]
+                if kind in ("InputLayer", "Dropout"):
+                    continue
+                if kind != "Dense":
+                    raise ValueError(f"Unsupported layer for numpy inference: {kind}")
+                name = layer["config"]["name"]
+                activation = layer["config"].get("activation", "linear")
+                if activation not in cls._ACTIVATIONS:
+                    raise ValueError(f"Unsupported activation: {activation}")
+                variables = h5[f"layers/{name}/vars"]
+                kernel = np.asarray(variables["0"], dtype=np.float32)
+                bias = np.asarray(variables["1"], dtype=np.float32)
+                layers.append((kernel, bias, activation))
+        if not layers:
+            raise ValueError(f"No Dense layers found in {model_path}")
+        return cls(layers)
+
+    def predict(self, x: np.ndarray, verbose: int = 0) -> np.ndarray:  # noqa: ARG002
+        out = np.asarray(x, dtype=np.float32)
+        for kernel, bias, activation in self.layers:
+            out = self._ACTIVATIONS[activation](out @ kernel + bias)
+        return out
 
 
 def load_labels(labels_path: Path = LABELS_PATH) -> List[str]:

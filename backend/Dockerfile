@@ -1,9 +1,10 @@
-# Container image for hosting the pose-analysis API (built for Hugging Face
-# Spaces, but works on any Docker host). HF Spaces routes public traffic to
-# the port declared as `app_port` in README.md (7860).
+# Container image for hosting the pose-analysis API with uvicorn (Render, Hugging
+# Face Spaces, any Docker host). Listens on $PORT when the host sets it (Render
+# does), otherwise 7860 (HF Spaces' `app_port`). AWS Lambda uses
+# Dockerfile.lambda instead.
 FROM python:3.11-slim
 
-# System libraries TensorFlow (libgomp) and OpenCV-headless (libglib) load at runtime
+# System libraries LiteRT (libgomp) and OpenCV-headless (libglib) load at runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libglib2.0-0 \
         libgomp1 \
@@ -23,4 +24,5 @@ COPY utils/ ./utils/
 COPY models/ ./models/
 
 EXPOSE 7860
-CMD ["uvicorn", "yoga_pose_engine:app", "--host", "0.0.0.0", "--port", "7860"]
+# Shell form so ${PORT} is expanded; exec keeps uvicorn as PID 1 for signals.
+CMD exec uvicorn yoga_pose_engine:app --host 0.0.0.0 --port ${PORT:-7860}
