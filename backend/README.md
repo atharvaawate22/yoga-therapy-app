@@ -153,6 +153,11 @@ uvicorn yoga_pose_engine:app --host 0.0.0.0 --port 8000
 # open http://localhost:8000/health
 ```
 
+`requirements.txt` includes full TensorFlow for training and evaluation. The
+server itself doesn't need it: MoveNet runs on LiteRT and the classifier runs
+in NumPy from the same `.keras` file (`utils.model.NumpyClassifier`), so the
+hosted images install the much smaller `requirements-space.txt`.
+
 ## Deploy free on Hugging Face Spaces
 
 This makes the API reachable from anywhere so the installed APK works without a

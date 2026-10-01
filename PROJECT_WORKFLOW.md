@@ -16,7 +16,8 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 ### Backend
 - FastAPI
 - Uvicorn
-- TensorFlow (TFLite Interpreter)
+- LiteRT (standalone TFLite interpreter) for MoveNet when serving
+- NumPy inference for the classifier head (TensorFlow/Keras only for training)
 - OpenCV
 - NumPy
 - Pydantic
@@ -29,13 +30,14 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 ## Core Algorithms
 
 ### 1) MoveNet Keypoint Extraction
-- Input image is center-cropped and resized to the MoveNet input size.
+- Input image is EXIF-rotated, downscaled, padded (not cropped) to a square,
+  and resized to the MoveNet input size.
 - MoveNet returns 17 keypoints with (y, x, score).
 - Keypoints are converted to pixel coordinates for further processing.
 
 ### 2) Keypoint Normalization
 - Hip midpoint is used as the origin.
-- Torso length is used to scale keypoints.
+- Torso width (the larger of shoulder width and hip width) is used to scale keypoints.
 - Normalized 2D keypoints are flattened into a 34-value vector.
 
 ### 3) Pose Classification
@@ -44,7 +46,10 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 - Optional stability filtering is applied for live mode (majority vote across recent frames).
 
 ### 4) Corrections and Feedback
-- Rule-based corrections are generated using keypoint relationships.
+- Rule-based corrections are generated using keypoint relationships, measured
+  in units of torso length so they do not depend on photo resolution or
+  camera distance. A rule only runs when the keypoints it needs were detected
+  confidently.
 - Experience level adjusts the strictness of correction rules.
 
 ## Project Workflow
@@ -60,10 +65,11 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 
 ### B) Backend Inference (FastAPI)
 1. Mobile app sends a base64 image to POST /analyze-pose.
-2. Backend decodes, crops, and runs MoveNet.
+2. Backend decodes, pads to a square, and runs MoveNet.
 3. Keypoints are normalized and passed to the classifier.
 4. Best pose is selected; corrections are generated.
-5. Response returns pose, confidence, corrections, and optional debug image.
+5. Response returns pose, confidence and corrections (the skeleton debug image
+   only when requested with `include_debug_image`).
 
 ### C) Mobile App Flow
 1. User selects a health condition.
@@ -96,6 +102,7 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 - Training script: backend/train_movenet_classifier.py
 - Evaluation: backend/eval_pose_metrics.py
 - Models: backend/models/movenet_lightning.tflite, backend/models/pose_classifier.keras
+  (served by utils.model.NumpyClassifier, no TensorFlow at runtime)
 - Labels: backend/models/pose_labels.json
 
 ## API Endpoints

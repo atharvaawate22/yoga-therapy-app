@@ -119,7 +119,7 @@ That's it — everything in section 1 now works with no further setup.
 
 The AI that recognizes your pose does **not** run on the phone. The app takes
 a camera frame (or a gallery photo) and sends it over the internet to a
-hosted backend — a MoveNet (TensorFlow Lite) keypoint model plus a trained
+hosted backend — a MoveNet keypoint model (LiteRT) plus a trained
 classifier, running on AWS Lambda behind API Gateway. The backend sends back
 the detected pose and correction tips, which the app shows on screen and
 speaks aloud.
@@ -145,8 +145,10 @@ Consequences of this design:
 
 ### Using it
 
-1. In the app, open **Live Mobile Pose Corrector** from the Home screen (live
-   camera) or use **🖼️ Image → Upload from Gallery** for a single photo.
+1. In the app, open **Live Mobile Pose Corrector** from the Home screen and
+   tap **▶ Start Live** (nothing is sent until you do), or use
+   **🖼️ Image → Upload from Gallery** for a single photo. While live, the app
+   sends about one camera frame per second for analysis; frames aren't saved.
 2. Optionally tap **Test Backend Connection** at the bottom to confirm it's
    reachable before you start.
 3. Stand back so your **full body** is in frame, in reasonably good lighting.

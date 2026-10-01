@@ -55,9 +55,10 @@ steps and a feature walkthrough.
 - Functional Components with React Hooks
 
 **Pose-analysis backend**
-- FastAPI + Uvicorn
-- TensorFlow (MoveNet SinglePose Lightning, TFLite)
-- OpenCV, NumPy
+- FastAPI + Uvicorn, hosted on AWS Lambda (container image) behind API Gateway
+- MoveNet SinglePose Lightning keypoints, run on LiteRT (the standalone TFLite runtime)
+- A small MLP pose classifier, trained with TensorFlow/Keras and served with plain NumPy
+- OpenCV, Pillow, NumPy
 
 ## Project Structure
 
@@ -71,7 +72,8 @@ service is self-contained under `backend/`.
 ├── package.json                    # JS dependencies
 ├── assets/poses/                   # Local pose reference images (see assets/README.md)
 ├── src/
-│   ├── components/                 # ProblemCard, PoseCard, RoundSelector, ExperienceBadge
+│   ├── components/                 # PoseCard, PoseImage, ProblemCard, RoundSelector,
+│   │                               # ExperienceBadge, WeeklyStreakStrip
 │   ├── screens/                    # Home, Pose, PoseDetail, PoseCorrector, HealthScan,
 │   │                               # SuryaNamaskar, CustomSet, ProfileSetup,
 │   │                               # PracticeSession, History, Settings
@@ -80,13 +82,15 @@ service is self-contained under `backend/`.
 │   ├── config/poseApi.js           # Backend API base URL and endpoints
 │   ├── navigation/                 # Bottom tabs + native stack
 │   ├── theme/                      # Centralized design system
-│   └── utils/                      # imageUtils, reminders
+│   └── utils/                      # reminders, uploadImage
 │
 └── backend/                        # Python pose-analysis service (independent of the app)
     ├── yoga_pose_engine.py         # FastAPI server (pose detection + corrections)
     ├── train_movenet_classifier.py # Training script for the pose classifier
     ├── eval_pose_metrics.py        # Evaluation metrics for the classifier
-    ├── requirements.txt            # Python dependencies
+    ├── requirements.txt            # Training/eval dependencies (full TensorFlow)
+    ├── requirements-space.txt      # Serving dependencies (no TensorFlow)
+    ├── Dockerfile.lambda           # AWS Lambda image (deployed by CI)
     └── models/                     # MoveNet TFLite model, trained classifier, labels
 ```
 
@@ -101,9 +105,9 @@ service is self-contained under `backend/`.
 
 ### Prerequisites
 
-- Node.js (v16 or later recommended)
-- npm or yarn
-- Expo CLI
+- Node.js 20 or later (Expo SDK 54)
+- npm
+- Expo CLI via `npx expo` (no global install needed)
 
 ### Installation
 
@@ -148,7 +152,9 @@ the finished APK when the build completes (a few minutes).
 #### Automated builds via GitHub Actions
 
 `.github/workflows/eas-build.yml` builds a fresh APK automatically on every
-push to `main`, and can also be run on demand. One-time setup:
+push to `main` that can change the app (pushes touching only `backend/`, docs
+or other workflows are skipped to save EAS build quota), and can also be run
+on demand. One-time setup:
 
 1. Create a free account at [expo.dev](https://expo.dev) if you don't have one.
 2. Generate an access token: [expo.dev/accounts/\[account\]/settings/access-tokens](https://expo.dev/accounts/%5Baccount%5D/settings/access-tokens) → **Create token**.
@@ -156,81 +162,73 @@ push to `main`, and can also be run on demand. One-time setup:
 
 After that, every push to `main` (or a manual run from the **Actions** tab →
 **EAS Build (Android APK)** → **Run workflow**) builds the APK in Expo's
-cloud and attaches it to the workflow run as a downloadable artifact
-(`yoga-therapy-app-preview-apk`) — no local setup needed to get a fresh
-installable APK.
+cloud, attaches it to the workflow run as a downloadable artifact
+(`yoga-therapy-app-preview-apk`), and publishes it to the rolling
+`latest-preview` GitHub Release that the download button above points to.
 
-The Live Pose Corrector works without the Python backend running: if it
-can't reach the backend, it automatically falls back to a simulated
-"DEMO" result so the feature is still demonstrable end-to-end.
+If the Live Pose Corrector can't reach the backend, it falls back to a
+simulated result clearly labelled **DEMO**, so the feature still demonstrates
+end to end. Demo results are never saved to history and never count as a
+match for a target pose.
 
-### Running the Pose-Analysis Backend
+### The Pose-Analysis Backend
 
-The live pose corrector requires the Python backend to be running on a machine
-reachable from your phone (same Wi-Fi network). All backend commands run from
-the `backend/` folder.
+The installed APK uses the hosted backend (AWS Lambda behind API Gateway,
+URL in `src/config/poseApi.js`); nothing needs to run locally. Pushes that
+change `backend/` are tested by `.github/workflows/backend-tests.yml` and
+deployed by `.github/workflows/deploy-lambda-backend.yml`, which smoke-tests
+the built image with the real models before it goes live and applies API
+Gateway rate limits.
 
-1. Create and activate a virtual environment (Python 3.11 recommended):
-   ```bash
-   cd backend
-   python -m venv .venv
-   # Windows
-   .venv\Scripts\activate
-   # macOS/Linux
-   source .venv/bin/activate
-   ```
+**Running it locally** (for backend development). In an Expo dev build the
+app automatically uses your dev machine's LAN IP on port 8000, so the phone
+and computer must be on the same Wi-Fi. From `backend/`:
 
-2. Install the Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt   # full TensorFlow, also needed for training
+uvicorn yoga_pose_engine:app --host 0.0.0.0 --port 8000
+```
 
-3. Start the FastAPI server:
-   ```bash
-   uvicorn yoga_pose_engine:app --host 0.0.0.0 --port 8000
-   ```
+Check it at `http://localhost:8000/health`. Tests need no TensorFlow:
+`pip install -r requirements-dev.txt && pytest`. See
+[backend/README.md](backend/README.md) for training and evaluation.
 
-4. Verify it is up by opening `http://localhost:8000/health` in a browser.
+### Pose API
 
-## Mobile Pose Corrector Integration
-
-This app includes a mobile screen that captures a camera frame and sends it to a Python backend for pose analysis.
-
-1. Open the app and tap **Live Mobile Pose Corrector** on the home screen.
-2. Ensure your phone and backend machine are on the same Wi-Fi network.
-3. **In development (Expo Go):** the server address is auto-detected from your
-   dev machine — no configuration needed.
-   **In an installed APK:** the app uses the `fallbackHost` IP hardcoded in
-   `src/config/poseApi.js`, so set it to your laptop's LAN IP *before building*.
-   See [USER_GUIDE.md](USER_GUIDE.md) for the full setup and troubleshooting guide.
-
-### Expected Backend Endpoint
-
-- URL: `POST /analyze-pose`
-- Request JSON:
+`POST /analyze-pose`
 
 ```json
 {
-   "image_base64": "..."
+  "image_base64": "<JPEG/PNG, optionally a data URL; max ~3 MB>",
+  "session_id": "<stable per live session; enables the stability filter>",
+  "source": "live | image",
+  "experience_level": "beginner | intermediate | expert",
+  "include_debug_image": false
 }
 ```
 
-- Response JSON:
+Response:
 
 ```json
 {
-   "pose": "warrior",
-   "confidence": 0.92,
-   "corrections": ["Arm too high/low", "Knee not over ankle"],
-   "distances": {
-      "warrior_arm_lateral": 0.31,
-      "warrior_arm_vertical": 0.24,
-      "warrior_arm_depth": 0.14
-   }
+  "pose": "warrior_pose",
+  "confidence": 0.92,
+  "corrections": ["Keep both arms level — extend equally left and right"],
+  "distances": {
+    "warrior_arm_span": 210.5,
+    "warrior_arm_height_offset": 12.3,
+    "warrior_wrist_height_diff": 8.1
+  },
+  "debug_image_base64": null,
+  "probabilities": { "warrior_pose": 0.92, "...": 0.01 }
 }
 ```
 
-Your existing laptop Python script should run as a service endpoint that accepts base64 images and returns this payload.
+`pose` is `"nopose"` when no full body is visible or the classifier isn't
+confident. `distances` are in percent of the person's torso length. The
+skeleton overlay is only returned when `include_debug_image` is true.
 
 ## Health Conditions Covered
 
@@ -248,31 +246,36 @@ Your existing laptop Python script should run as a service endpoint that accepts
 
 ## Theme Colors
 
+Defined in `src/theme/theme.js`:
+
 | Color      | Hex Code  | Usage                    |
 |------------|-----------|--------------------------|
-| Primary    | #4CAF50   | Main actions, headers    |
+| Primary    | #2E7D32   | Main actions, headers    |
 | Secondary  | #81C784   | Badges, accents          |
-| Background | #F1F8E9   | Screen backgrounds       |
+| Background | #F5F9F4   | Screen backgrounds       |
 | Card       | #FFFFFF   | Card backgrounds         |
-| Text       | #333333   | Primary text             |
+| Text       | #1A2E1A   | Primary text             |
 
 ## Adding New Health Problems
 
-To add new health conditions:
-
-1. Open `src/data/yogaData.js`
-2. Add a new entry with the problem name and array of poses:
+1. Open `src/data/yogaData.js`.
+2. Add an entry built with the `p(...)` helper:
 
 ```javascript
 "New Problem": [
-  {
-    name: "Pose Name",
-    description: "Description of the pose",
-    duration: "Duration",
-    image: "image_url"
-  }
-]
+  p("tree_pose", "Tree Pose", "Vrksasana",
+    "Short description of why this pose helps.",
+    "30 sec each", "beginner",            // duration, difficulty
+    ["Benefit one", "Benefit two"],
+    ["Precaution one"],
+    ["Step one", "Step two", "Step three"]),
+],
 ```
+
+The pose id must be in `ALLOWED_POSE_IDS` (same file) or it is filtered out.
+Photos come from `src/data/poseImages.js`; a pose without a bundled photo
+shows an icon placeholder. Add an icon for the new condition in
+`src/components/ProblemCard.js` and, optionally, tips in `src/data/proTips.js`.
 
 ## Disclaimer
 

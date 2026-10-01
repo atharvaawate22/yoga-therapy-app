@@ -37,8 +37,9 @@ the 3-of-5 majority would rarely be reached and poses would stop being
 reported. Scaling out needs session affinity
 (`service.spec.sessionAffinity: ClientIP`) or that history moved into Redis.
 
-**Startup probe.** Importing TensorFlow and allocating the TFLite interpreter
-takes noticeably longer than a normal web process starts. The startup probe
+**Startup probe.** Loading the LiteRT interpreter and the models takes longer
+than a normal web process starts (much less than it did with full TensorFlow,
+but the probe budget is kept generous). The startup probe
 gives it up to 150s before the liveness probe is allowed to begin, which stops
 a slow cold boot from being restart-looped.
 
@@ -48,6 +49,6 @@ disk", not "the first inference will be fast". For a stricter gate, add an
 endpoint that touches `get_classifier()` and point `readinessProbe` at it —
 readiness would then lag by one model load.
 
-**Resources.** The requests reflect idle footprint; the 2Gi limit is headroom
-for TensorFlow during inference. Confirm against your own workload with
+**Resources.** The requests reflect idle footprint; the 2Gi limit is generous
+headroom now that serving no longer imports TensorFlow. Confirm against your own workload with
 `kubectl top pod` before treating these as anything but a starting point.
