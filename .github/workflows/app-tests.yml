@@ -1,0 +1,38 @@
+name: App Tests
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "backend/**"
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "backend/**"
+      - "**/*.md"
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: jest + bundle check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --ci
+
+      # Catches syntax/import errors in any screen in about a minute, without
+      # spending an EAS build to find out.
+      - name: Bundle the Android JS
+        run: npx expo export --platform android --output-dir dist-check
