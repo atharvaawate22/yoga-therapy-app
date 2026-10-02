@@ -101,7 +101,7 @@ This project is a mobile yoga therapy app with a Python backend for pose analysi
 - API server: backend/yoga_pose_engine.py
 - Training script: backend/train_movenet_classifier.py
 - Evaluation: backend/eval_pose_metrics.py
-- Models: backend/models/movenet_lightning.tflite, backend/models/pose_classifier.keras
+- Models: backend/models/movenet_thunder.tflite (default; movenet_lightning.tflite via MOVENET_VARIANT), backend/models/pose_classifier.keras
   (served by utils.model.NumpyClassifier, no TensorFlow at runtime)
 - Labels: backend/models/pose_labels.json
 

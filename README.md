@@ -48,7 +48,7 @@ steps and a feature walkthrough.
 
 ## Engineering Highlights
 
-**Pose recognition pipeline.** Camera frame → MoveNet keypoints → body-visibility
+**Pose recognition pipeline.** Camera frame → MoveNet Thunder keypoints → body-visibility
 check → normalized keypoint vector → MLP classifier → confidence cutoff →
 multi-frame vote → rule-based corrections that are spoken aloud. The correction
 rules measure in torso lengths, so feedback doesn't depend on photo resolution
@@ -66,17 +66,27 @@ or camera distance. A rule only runs on joints the model detected confidently.
   chose training options by multi-seed ablation (mirror augmentation helped;
   joint-angle features and class weighting didn't), and merged or dropped
   classes the data couldn't support.
-- Result: macro F1 **0.746 → 0.778** on the leak-free test set; butterfly
-  **0.354 → 0.615**, seated twist **0.596 → 0.646**. Remaining weak classes
-  are documented with their data counts.
+- Built an **independent test set** of 238 freely licensed Wikimedia Commons
+  photos: hand-reviewed, with attribution, and checked against training data
+  with a perceptual hash (it caught 12 resized copies an exact-match check
+  would miss).
+- Swapped MoveNet Lightning for the more accurate **Thunder** keypoint model
+  after it won on all three measurements.
+- Result: macro F1 **0.746 → 0.828** on the leak-free test set; butterfly
+  **0.354 → 0.779**, seated twist **0.596 → 0.752**; **80% accuracy** on the
+  independent photos. Remaining weak classes are documented with their data
+  counts, and there's a [recording guide](docs/RECORDING_GUIDE.md) plus a
+  script that turns friends' phone videos into training data, holding out
+  whole people as the test set.
 
 **Serverless serving.** The API runs as a container on AWS Lambda behind API
 Gateway, with no TensorFlow at runtime: MoveNet runs on LiteRT, and the
 classifier runs in NumPy straight from the Keras file (verified equal to Keras
-within 3×10⁻⁷). Models load in 0.3 s, down from timing out the 30 s gateway.
+within 3×10⁻⁷). Models load in under a second, down from timing out the
+30 s gateway.
 The app pre-warms the server when the corrector opens.
 
-**Delivery.** 214 backend tests and 33 app tests (including an app↔model
+**Delivery.** 227 backend tests and 33 app tests (including an app↔model
 contract test) run in CI. Each backend deploy builds the image and smoke-tests
 the real models inside it before pushing. The public API is rate-limited.
 Every app change builds an APK with EAS and publishes it to the download link

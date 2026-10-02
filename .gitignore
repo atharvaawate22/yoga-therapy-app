@@ -12,9 +12,14 @@ __pycache__/
 # Training datasets (stored locally — see README)
 yoga_poses/
 dataset/
+# Recorded pose videos and their held-out test frames (extract_video_frames.py)
+videos/
+dataset_test/
+# Wikimedia Commons test photos (fetch_wikimedia_testset.py; licences in ATTRIBUTION.csv)
+dataset_wikimedia/
 
 # Derived: regenerate with `train_movenet_classifier.py --rebuild-cache`
-backend/models/feature_cache.npz
+backend/models/feature_cache*.npz
 
 # Expo
 .expo/
