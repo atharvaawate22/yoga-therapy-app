@@ -57,15 +57,16 @@ const suryaNamaskarSteps = [
   {
     step: 5,
     name: "Plank Pose",
-    // Kumbhakasana is plank; Dandasana is the seated Staff Pose. The
-    // classifier label stays "dandasana" (see expectedPoseId) because the
-    // training data used that folder name for plank.
+    // Kumbhakasana is plank; Dandasana is the seated Staff Pose (the training
+    // data used "dandasana" for plank).
     sanskritName: "Kumbhakasana",
     description: "Step left foot back to plank, body in a straight line from head to heels.",
     duration: 5,
     image: getPoseImage("plank_pose"),
     imageId: "plank_pose",
-    expectedPoseId: "dandasana",
+    // Not recognized by the pose corrector: the training set had only 6
+    // usable plank images, so the class was dropped. No "Test This Pose".
+    expectedPoseId: null,
     breathing: "Hold breath",
     steps: ["Step left foot back to meet right", "Body forms straight line", "Arms perpendicular to floor", "Engage core and hold"]
   },

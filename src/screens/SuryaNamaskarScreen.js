@@ -205,19 +205,21 @@ const SuryaNamaskarScreen = ({ navigation }) => {
           )}
         </View>
 
-        <View style={styles.testPoseRow}>
-          <TouchableOpacity
-            style={styles.testPoseButton}
-            onPress={() => navigation.navigate('PoseCorrector', {
-              expectedPoseId: step.expectedPoseId,
-              expectedPoseName: step.sanskritName,
-            })}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.testPoseButtonText}>Test This Pose</Text>
-            <Ionicons name="chevron-forward" size={15} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
+        {step.expectedPoseId ? (
+          <View style={styles.testPoseRow}>
+            <TouchableOpacity
+              style={styles.testPoseButton}
+              onPress={() => navigation.navigate('PoseCorrector', {
+                expectedPoseId: step.expectedPoseId,
+                expectedPoseName: step.sanskritName,
+              })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.testPoseButtonText}>Test This Pose</Text>
+              <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Navigation */}
         <View style={styles.navRow}>

@@ -31,7 +31,13 @@ export const POSE_API_BASE_URL =
 export const POSE_API_ENDPOINTS = {
   analyze: '/analyze-pose',
   health: '/health',
+  // Loads the models; called when the corrector opens (see PoseCorrectorScreen).
+  warmup: '/warmup',
 };
+
+// A 502/503/504 means the gateway gave up waiting (typically a serverless
+// container still starting), not an application error.
+export const GATEWAY_TIMEOUT_STATUSES = [502, 503, 504];
 
 // Generous timeout: a hosted free-tier backend can cold-start on the first
 // request (~30–60s) before responses become fast.

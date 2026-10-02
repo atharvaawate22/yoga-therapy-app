@@ -1,6 +1,6 @@
 # Yoga Therapy App
 
-A React Native mobile application built with Expo that helps users find recommended yoga poses for various physical and mental health problems. It includes an AI-powered live pose corrector backed by a Python (FastAPI + TensorFlow/MoveNet) server.
+A React Native mobile application built with Expo that helps users find recommended yoga poses for various physical and mental health problems. It includes an AI-powered live pose corrector backed by a Python (FastAPI + MoveNet) service on AWS Lambda.
 
 For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_WORKFLOW.md](PROJECT_WORKFLOW.md).
 
@@ -45,6 +45,42 @@ steps and a feature walkthrough.
 - 🔔 Daily practice reminder notifications (local, no account needed)
 - 📷 AI Live Pose Corrector with spoken corrections (backend-powered)
 - ⚙️ Bottom-tab navigation (Home / Progress / Settings) with a wellness-themed UI
+
+## Engineering Highlights
+
+**Pose recognition pipeline.** Camera frame → MoveNet keypoints → body-visibility
+check → normalized keypoint vector → MLP classifier → confidence cutoff →
+multi-frame vote → rule-based corrections that are spoken aloud. The correction
+rules measure in torso lengths, so feedback doesn't depend on photo resolution
+or camera distance. A rule only runs on joints the model detected confidently.
+
+**Data quality work on the classifier** ([details](backend/README.md#data-cleaning)):
+- Found a *train/serve mismatch*: the model was trained on center-cropped
+  images while the server padded them, and training skipped the server's EXIF
+  rotation. Both now go through one shared preprocessing function.
+- Found 200 training images labelled **both** cobra and upward dog (the same
+  file filed in two folders), and **35% of the test set** (1,143 of 3,425
+  images) duplicated from training. Extraction now drops label conflicts and
+  duplicates, and evaluation excludes train copies.
+- Added grouped k-fold cross-validation so every class gets an honest score,
+  chose training options by multi-seed ablation (mirror augmentation helped;
+  joint-angle features and class weighting didn't), and merged or dropped
+  classes the data couldn't support.
+- Result: macro F1 **0.746 → 0.778** on the leak-free test set; butterfly
+  **0.354 → 0.615**, seated twist **0.596 → 0.646**. Remaining weak classes
+  are documented with their data counts.
+
+**Serverless serving.** The API runs as a container on AWS Lambda behind API
+Gateway, with no TensorFlow at runtime: MoveNet runs on LiteRT, and the
+classifier runs in NumPy straight from the Keras file (verified equal to Keras
+within 3×10⁻⁷). Models load in 0.3 s, down from timing out the 30 s gateway.
+The app pre-warms the server when the corrector opens.
+
+**Delivery.** 214 backend tests and 33 app tests (including an app↔model
+contract test) run in CI. Each backend deploy builds the image and smoke-tests
+the real models inside it before pushing. The public API is rate-limited.
+Every app change builds an APK with EAS and publishes it to the download link
+above.
 
 ## Tech Stack
 

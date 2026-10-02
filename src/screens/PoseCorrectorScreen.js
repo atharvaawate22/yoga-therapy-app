@@ -9,11 +9,14 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { colors, typography, spacing, borderRadius, screenStyles, shadows } from '../theme/theme';
-import { POSE_API_BASE_URL, POSE_API_ENDPOINTS, POSE_API_TIMEOUT_MS } from '../config/poseApi';
+import {
+  GATEWAY_TIMEOUT_STATUSES, POSE_API_BASE_URL, POSE_API_ENDPOINTS, POSE_API_TIMEOUT_MS,
+} from '../config/poseApi';
 import { getUserProfile, getVoiceEnabled } from '../data/userStorage';
 import { getNextDemoResult } from '../data/demoPoseData';
 import { savePracticeSession, formatDuration } from '../data/sessionStorage';
 import { prepareImageForUpload } from '../utils/uploadImage';
+import { POSE_DISPLAY_NAMES, POSE_SANSKRIT_NAMES } from '../data/poseNames';
 import ExperienceBadge from '../components/ExperienceBadge';
 
 const defaultResult = {
@@ -23,80 +26,6 @@ const defaultResult = {
   distances: {},
 };
 
-// Common (English) name shown first and spoken aloud -- the Sanskrit name
-// alone ("Vrksasana") means nothing to most users; "Tree Pose" does.
-const POSE_COMMON_NAMES = {
-  downward_dog: 'Downward-Facing Dog',
-  low_lunge: 'Low Lunge',
-  seated_twist: 'Seated Spinal Twist',
-  butterfly_pose: 'Butterfly Pose',
-  childs_pose: "Child's Pose",
-  cat_cow: 'Cat-Cow Stretch',
-  plow_pose: 'Plow Pose',
-  garland_pose: 'Garland Pose',
-  boat_pose: 'Boat Pose',
-  seated_forward_bend: 'Seated Forward Bend',
-  shoulder_stand: 'Shoulder Stand',
-  bridge_pose: 'Bridge Pose',
-  triangle_pose: 'Triangle Pose',
-  upward_dog: 'Upward-Facing Dog',
-  chair_pose: 'Chair Pose',
-  forward_bend: 'Standing Forward Fold',
-  warrior_pose: 'Warrior II',
-  tree_pose: 'Tree Pose',
-  pranamasana: 'Prayer Pose',
-  hasta_uttanasana: 'Raised Arms Pose',
-  hasta_padasana: 'Hand to Foot Pose',
-  ashwa_sanchalanasana: 'Equestrian Pose',
-  dandasana: 'Plank Pose',
-  ashtanga_namaskara: 'Eight-Limbed Pose',
-  cobra_pose: 'Cobra Pose',
-  tadasana: 'Mountain Pose',
-  nopose: 'No Pose',
-  // Retained for a classifier trained before these labels were merged into
-  // downward_dog / cobra_pose / forward_bend. A retrained model never emits them.
-  adho_mukha_svanasana: 'Downward-Facing Dog',
-  bhujangasana: 'Cobra Pose',
-  uttanasana: 'Standing Forward Fold',
-};
-
-// Sanskrit name shown as a subtitle under the common name -- never spoken
-// aloud on its own (see speakCorrection), just for reference.
-const POSE_SANSKRIT_NAMES = {
-  downward_dog: 'Adho Mukha Svanasana',
-  low_lunge: 'Anjaneyasana',
-  seated_twist: 'Ardha Matsyendrasana',
-  butterfly_pose: 'Baddha Konasana',
-  childs_pose: 'Balasana',
-  cat_cow: 'Bitilasana',
-  plow_pose: 'Halasana',
-  garland_pose: 'Malasana',
-  boat_pose: 'Navasana',
-  seated_forward_bend: 'Paschimottanasana',
-  shoulder_stand: 'Salamba Sarvangasana',
-  bridge_pose: 'Setu Bandha Sarvangasana',
-  triangle_pose: 'Trikonasana',
-  upward_dog: 'Urdhva Mukha Svanasana',
-  chair_pose: 'Utkatasana',
-  forward_bend: 'Uttanasana',
-  warrior_pose: 'Virabhadrasana Two',
-  tree_pose: 'Vrksasana',
-  pranamasana: 'Pranamasana',
-  hasta_uttanasana: 'Hasta Uttanasana',
-  hasta_padasana: 'Hasta Padasana',
-  ashwa_sanchalanasana: 'Ashwa Sanchalanasana',
-  dandasana: 'Kumbhakasana', // model label for plank; see suryaNamaskarData
-  ashtanga_namaskara: 'Ashtanga Namaskara',
-  cobra_pose: 'Bhujangasana',
-  tadasana: 'Tadasana',
-  adho_mukha_svanasana: 'Adho Mukha Svanasana',
-  bhujangasana: 'Bhujangasana',
-  uttanasana: 'Uttanasana',
-};
-
-// Backward-compatible alias: existing lookups (POSE_DISPLAY_NAMES[id]) keep
-// working and now resolve to the common name.
-const POSE_DISPLAY_NAMES = POSE_COMMON_NAMES;
 
 const KEEP_AWAKE_TAG = 'pose-corrector-live';
 
@@ -142,22 +71,40 @@ const PoseCorrectorScreen = ({ route }) => {
   const sessionId = useMemo(() => `session-${Date.now()}-${Math.floor(Math.random() * 1000000)}`, []);
   const apiUrl = useMemo(() => `${POSE_API_BASE_URL}${POSE_API_ENDPOINTS.analyze}`, []);
   const healthUrl = useMemo(() => `${POSE_API_BASE_URL}${POSE_API_ENDPOINTS.health}`, []);
+  const warmupUrl = useMemo(() => `${POSE_API_BASE_URL}${POSE_API_ENDPOINTS.warmup}`, []);
 
   useEffect(() => { requestPermission(); }, [requestPermission]);
 
   // Ping the backend once on mount so users see upfront if analysis is unavailable
+  // Wake the server as soon as the screen opens: /warmup loads the models,
+  // so by the time the user presses Start the first analysis is fast instead
+  // of running into the gateway timeout. A cold start can itself exceed the
+  // gateway's 30s limit, but the container keeps starting, so one retry
+  // normally lands on a warm server.
   const checkBackend = useCallback(async () => {
     setIsBackendOnline(null);
-    try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(healthUrl, { method: 'GET', signal: controller.signal });
-      clearTimeout(timeoutId);
-      setIsBackendOnline(response.ok);
-    } catch {
-      setIsBackendOnline(false);
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      try {
+        const response = await fetch(warmupUrl, { method: 'GET', signal: controller.signal });
+        if (response.ok) { setIsBackendOnline(true); return; }
+        if (!GATEWAY_TIMEOUT_STATUSES.includes(response.status)) break;
+      } catch {
+        break; // offline / DNS failure: retrying won't help
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
-  }, [healthUrl]);
+    setIsBackendOnline(false);
+  }, [warmupUrl]);
+
+  const postAnalyze = (body, signal) => fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    signal,
+  });
 
   useEffect(() => { checkBackend(); }, [checkBackend]);
 
@@ -210,17 +157,18 @@ const PoseCorrectorScreen = ({ route }) => {
       analyzingRef.current = true;
       setIsAnalyzing(true);
       timeoutId = setTimeout(() => controller.abort(), POSE_API_TIMEOUT_MS);
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_base64: imageBase64,
-          session_id: sessionId,
-          source,
-          experience_level: experienceRef.current,
-        }),
-        signal: controller.signal,
+      const body = JSON.stringify({
+        image_base64: imageBase64,
+        session_id: sessionId,
+        source,
+        experience_level: experienceRef.current,
       });
+      let response = await postAnalyze(body, controller.signal);
+      // One retry on a gateway timeout: the container usually finishes
+      // starting during the first attempt, so this avoids a DEMO result.
+      if (GATEWAY_TIMEOUT_STATUSES.includes(response.status)) {
+        response = await postAnalyze(body, controller.signal);
+      }
       if (!response.ok) {
         const text = await response.text();
         const error = new Error(response.status === 429
@@ -231,7 +179,7 @@ const PoseCorrectorScreen = ({ route }) => {
         // serverless container taking longer to start than the gateway's
         // own timeout allows -- not a real application error, so it's
         // handled the same as an unreachable backend below.
-        error.isGatewayUnavailable = [502, 503, 504].includes(response.status);
+        error.isGatewayUnavailable = GATEWAY_TIMEOUT_STATUSES.includes(response.status);
         throw error;
       }
       const payload = await response.json();
@@ -497,6 +445,16 @@ const PoseCorrectorScreen = ({ route }) => {
         <Text style={styles.title}>Live Pose Corrector</Text>
         <Text style={styles.subtitle}>Real-time AI pose detection with instant voice + visual corrections.</Text>
 
+        {/* Server waking up */}
+        {isBackendOnline === null && (
+          <View style={styles.wakingBanner}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.wakingText}>
+              Waking up the analysis server… the first use after a while can take up to a minute.
+            </Text>
+          </View>
+        )}
+
         {/* Backend offline banner */}
         {isBackendOnline === false && (
           <View style={styles.offlineBanner}>
@@ -733,6 +691,12 @@ const styles = StyleSheet.create({
   },
   offlineTitle: { ...typography.bodySmall, fontWeight: '700', color: '#795548' },
   offlineText: { ...typography.caption, color: '#795548', marginTop: 4, lineHeight: 17 },
+  wakingBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.cardAlt, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginBottom: spacing.md,
+  },
+  wakingText: { ...typography.caption, color: colors.textLight, flex: 1, lineHeight: 17 },
   offlineRetryBtn: {
     alignSelf: 'flex-start', backgroundColor: colors.warning, borderRadius: borderRadius.md,
     paddingVertical: 8, paddingHorizontal: spacing.md, marginTop: spacing.sm,
