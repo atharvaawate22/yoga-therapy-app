@@ -1,22 +1,11 @@
----
-title: Yoga Pose Engine
-emoji: 🧘
-colorFrom: green
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Yoga Pose Engine (backend API)
 
 FastAPI service that powers the Yoga Therapy app's Live Pose Corrector. It runs
 MoveNet (TFLite) for body keypoints and a small classifier for the pose label,
 then returns rule-based corrections.
 
-The YAML block at the top of this file configures a **Hugging Face Space** — it
-is ignored everywhere else, so this doubles as the Space's landing page and the
-backend's own README.
+In production it runs on **AWS Lambda** as a container image behind API
+Gateway; see [Deployment](#deployment).
 
 ## Layout
 
@@ -31,6 +20,9 @@ utils/                      shared by all three — this is what prevents skew
   ├── movenet.py            TFLite keypoint runtime (lazy TF import)
   ├── dataset.py            labelled folders -> feature matrix
   └── model.py              classifier architecture / train / save / load
+lambda_handler.py           AWS Lambda entry point (wraps the app with Mangum)
+Dockerfile.lambda           Lambda container image (the hosted API)
+Dockerfile                  plain uvicorn image for any other Docker host
 tests/                      pytest suite (runs without TensorFlow)
 k8s/                        Minikube-oriented Deployment + Service
 ```
@@ -158,48 +150,30 @@ server itself doesn't need it: MoveNet runs on LiteRT and the classifier runs
 in NumPy from the same `.keras` file (`utils.model.NumpyClassifier`), so the
 hosted images install the much smaller `requirements-space.txt`.
 
-## Deploy free on Hugging Face Spaces
+## Deployment
 
-This makes the API reachable from anywhere so the installed APK works without a
-laptop on the same Wi-Fi. Free tier, no credit card.
+The hosted API runs on **AWS Lambda** (`us-east-1`) as a container image behind
+an API Gateway HTTP API. The app reaches it through `HOSTED_API_URL` in
+[`src/config/poseApi.js`](../src/config/poseApi.js).
 
-1. Create a free account at <https://huggingface.co>.
-2. **New → Space.** Choose **SDK: Docker**, give it a name (e.g.
-   `yoga-pose-engine`), visibility **Public**, and create it.
-3. Push **only these files** into the Space repo (the Dockerfile serves just
-   the API + models — do **not** upload the training data under
-   `yoga_poses/` / `dataset/`):
-   - `Dockerfile`
-   - `requirements-space.txt`
-   - `yoga_pose_engine.py`
-   - `utils/` (shared preprocessing/label code — the server will not import without it)
-   - `models/` (all three files)
-   - `README.md` (this file — its YAML header configures the Space)
+- `Dockerfile.lambda` builds the image: the serving dependencies from
+  `requirements-space.txt`, the Lambda Runtime Interface Client, and
+  `lambda_handler.py`, which wraps the unchanged FastAPI app with Mangum.
+- [`deploy-lambda-backend.yml`](../.github/workflows/deploy-lambda-backend.yml)
+  runs on every push to `main` that touches `backend/`. It builds the image,
+  smoke-tests it with `smoke_test_image.py`, pushes it to ECR, creates or
+  updates the Lambda function (30 s timeout, 2 GB memory) and applies API
+  Gateway throttling (10 requests/s, burst 20). It needs the
+  `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` repository secrets.
+- Check a deploy with `GET /health` on the API URL.
 
-   Either drag them in via the Space's **Files** tab, or with git:
-   ```bash
-   git clone https://huggingface.co/spaces/<your-user>/yoga-pose-engine
-   cd yoga-pose-engine
-   # copy the 5 items above into here
-   git add . && git commit -m "Deploy yoga pose engine" && git push
-   ```
-   > If HF asks you to use Git LFS for `movenet_lightning.tflite` (9 MB), run
-   > `git lfs install && git lfs track "*.tflite"` before committing.
-4. HF builds the image automatically — watch the **Logs** tab (first build
-   ~5–10 min). When the status reads **Running**, your API is live at:
-   ```
-   https://<your-user>-yoga-pose-engine.hf.space
-   ```
-5. Verify: open `https://<your-user>-yoga-pose-engine.hf.space/health` in a
-   browser — you should get a JSON response.
-6. Point the app at it: set `HOSTED_API_URL` in
-   [`src/config/poseApi.js`](../src/config/poseApi.js) to that base URL, then
-   rebuild the APK (`eas build` or the local Gradle build).
+The plain `Dockerfile` runs the same app with uvicorn on `$PORT` (7860 by
+default) for any other Docker host, such as Render or the Minikube setup in
+`k8s/`.
 
 ### Cold starts
 
-Free Spaces sleep after ~48 h of inactivity. The **first** request after sleep
-takes ~30–60 s to wake the container, then responses are fast. In the app this
-shows as the "Analysis server unreachable" banner on first open — wait a few
-seconds and tap **Retry Connection**. Photo-upload mode is the smoothest demo;
-live-streaming mode works but is slower over the internet than on LAN.
+The first request after the function has been idle starts a new container, so
+it is noticeably slower than the ones after it. If the app shows "Analysis
+server unreachable" on first open, wait a few seconds and tap
+**Retry Connection**.
