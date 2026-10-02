@@ -50,11 +50,9 @@ CANONICAL_LABELS: FrozenSet[str] = frozenset(
         "chair_pose",
         "childs_pose",
         "cobra_pose",
-        "dandasana",
         "downward_dog",
         "forward_bend",
         "garland_pose",
-        "hasta_padasana",
         "hasta_uttanasana",
         "low_lunge",
         "plow_pose",
@@ -72,7 +70,12 @@ CANONICAL_LABELS: FrozenSet[str] = frozenset(
 
 # Labels that are recognized but deliberately not trained. Feature extraction
 # skips these folders entirely, so they never become a softmax output.
-EXCLUDED_LABELS: FrozenSet[str] = frozenset({UNKNOWN})
+#
+# `dandasana` (Surya Namaskar plank) is excluded too: after deduplication only
+# 6 usable images remain, and cross-validation got 1 of them right. A class
+# that can't be learned is better dropped than served as a confident guess.
+DANDASANA = "dandasana"
+EXCLUDED_LABELS: FrozenSet[str] = frozenset({UNKNOWN, DANDASANA})
 
 
 def is_excluded_label(label: str) -> bool:
@@ -118,7 +121,11 @@ _ALIASES: Dict[str, str] = {
     "virabhadrasana_two": "warrior_pose",
     "vrksasana": "tree_pose",
     "hastauttanasana": "hasta_uttanasana",
-    "hastapadasana": "hasta_padasana",
+    # Hasta Padasana (Surya steps 3 & 10) is the standing forward fold; as
+    # its own class, cross-validation predicted 42 of its 52 images as
+    # forward_bend, so the two are trained as one.
+    "hastapadasana": "forward_bend",
+    "hasta_padasana": "forward_bend",
     # ── Informal / shorthand English ──
     "dog": "downward_dog",
     "downward_facing_dog": "downward_dog",
@@ -167,7 +174,6 @@ def normalize_label(label: str) -> str:
 # training time. They remain so that a classifier saved before the merge still
 # resolves to the right rules instead of falling through to generic feedback.
 _FEEDBACK_ALIASES: Dict[str, str] = {
-    "ashwa_sanchalanasana": "low_lunge",
     # Legacy (pre-merge) label space:
     "adho_mukha_svanasana": "downward_dog",
     "bhujangasana": "cobra_pose",

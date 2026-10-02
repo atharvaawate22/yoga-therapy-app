@@ -131,3 +131,10 @@ def test_front_view_downward_dog_with_hands_together_is_told_to_spread() -> None
     front = keypoints({9: (198, 200), 10: (202, 200)})
     cues = engine._generate_corrections("downward_dog", front, "beginner")
     assert any("Spread your hands" in c for c in cues)
+
+
+def test_equestrian_pose_with_hands_down_is_not_told_to_raise_arms() -> None:
+    hands_down = keypoints({9: (150, 360), 10: (250, 360)})
+    cues = engine._generate_corrections("ashwa_sanchalanasana", hands_down, "beginner")
+    assert not any("arms" in c.lower() and "overhead" in c.lower() for c in cues)
+    assert not any("hands on the floor" in c for c in cues)

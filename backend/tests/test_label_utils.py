@@ -76,7 +76,8 @@ def test_hyphens_and_spaces_are_equivalent(raw: str) -> None:
         ("Virabhadrasana Two", "warrior_pose"),
         ("Vrksasana", "tree_pose"),
         ("hastauttanasana", "hasta_uttanasana"),
-        ("hastapadasana", "hasta_padasana"),
+        ("hastapadasana", "forward_bend"),
+        ("hasta_padasana", "forward_bend"),
     ],
 )
 def test_sanskrit_maps_to_canonical_english(raw: str, expected: str) -> None:
@@ -169,12 +170,12 @@ def test_merged_sanskrit_names_are_no_longer_canonical(merged: str) -> None:
 def test_equestrian_lunge_stays_a_separate_class() -> None:
     """Not a duplicate: hands-down Sun Salutation lunge vs. arms-up Anjaneyasana.
 
-    They share correction cues but are different shapes, so they stay distinct
-    classes and are collapsed only for rule lookup.
+    Different shapes, so distinct classes with their own correction rules
+    (Low Lunge's "raise your arms overhead" is wrong with hands on the floor).
     """
     assert normalize_label("Ashwa Sanchalanasana") == "ashwa_sanchalanasana"
     assert "ashwa_sanchalanasana" in CANONICAL_LABELS
-    assert feedback_pose_alias("ashwa_sanchalanasana") == "low_lunge"
+    assert feedback_pose_alias("ashwa_sanchalanasana") == "ashwa_sanchalanasana"
 
 
 # ── Sentinels and passthrough ─────────────────────────────────────────────
@@ -227,9 +228,13 @@ def test_every_alias_target_is_known() -> None:
 # ── Correction-rule aliases ───────────────────────────────────────────────
 
 
-def test_feedback_alias_routes_distinct_pose_to_shared_rules() -> None:
-    """Correction rules are written against the English name only."""
-    assert feedback_pose_alias("ashwa_sanchalanasana") == "low_lunge"
+def test_equestrian_pose_keeps_its_own_correction_rules() -> None:
+    """Hands-down Ashwa Sanchalanasana must not get Low Lunge's arms-up cue."""
+    assert feedback_pose_alias("ashwa_sanchalanasana") == "ashwa_sanchalanasana"
+
+
+def test_unlearnable_dandasana_is_excluded() -> None:
+    assert is_excluded_label(normalize_label("dandasana"))
 
 
 @pytest.mark.parametrize(

@@ -470,6 +470,15 @@ def _generate_corrections(
             corrections.append("Square your shoulders forward — keep them level")
         praise = "Good Low Lunge! Sink the hips forward and lift your chest."
 
+    # ── 2b. Equestrian Pose (Surya Namaskar lunge, hands on the floor) ──
+    elif pose == "ashwa_sanchalanasana":
+        if seen(LS, RS) and not shoulders_level:
+            corrections.append("Keep your shoulders level and open the chest")
+        # Hands stay on the floor beside the front foot, below the hips.
+        if seen(LW, RW, LH, RH) and wrist_y < hip_y:
+            corrections.append("Place both hands on the floor beside your front foot")
+        praise = "Good Equestrian Pose! Lift the chest and look up."
+
     # ── 3. Seated Spinal Twist ──
     elif pose == "seated_twist":
         if seen(LS, RS) and abs(l_shoulder[0] - r_shoulder[0]) < 15:
@@ -677,6 +686,20 @@ def _format_top_k(probabilities: Dict[str, float], k: int = 3) -> str:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────
+
+
+@app.get("/warmup")
+def warmup(
+    movenet: MoveNetRuntime = Depends(get_movenet),
+    classifier: ClassifierRuntime = Depends(get_classifier),
+) -> dict:
+    """Load both models now, so the user's first analysis doesn't pay for it.
+
+    The app calls this when the pose corrector opens. On a cold serverless
+    container, loading the runtimes made the first real request run past API
+    Gateway's 30s limit (a 503 the app then showed as a DEMO result).
+    """
+    return {"status": "ok", "classifier_ready": classifier.ready()}
 
 
 @app.get("/health")

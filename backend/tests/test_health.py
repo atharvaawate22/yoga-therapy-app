@@ -36,3 +36,14 @@ def test_health_does_not_load_models() -> None:
 
     assert engine._movenet_runtime is None
     assert engine._classifier_runtime is None
+
+
+def test_warmup_loads_the_models(make_client) -> None:
+    from conftest import StubMoveNet
+
+    movenet = StubMoveNet()
+    client = make_client(movenet=movenet)
+
+    body = client.get("/warmup").json()
+
+    assert body == {"status": "ok", "classifier_ready": True}

@@ -76,54 +76,73 @@ its summary line:
   copies of training images. The evaluator passes the training set's hashes
   (`exclude_hashes`) so those are not scored as held out.
 
-### Results (leak-free test set)
+### Label-space changes
 
-1,591 test images remain after cleaning. Every test image of `upward_dog` and
-of the Surya-only classes (`ashtanga_namaskara`, `ashwa_sanchalanasana`,
-`dandasana`, `hasta_padasana`, `hasta_uttanasana`, `pranamasana`, `tadasana`)
-was a copy of a training image, so those 8 classes currently **have no
-held-out evaluation**; adding fresh test photos for them is the next data task.
+- `hasta_padasana` (Surya steps 3 & 10) is trained as `forward_bend`: it is
+  the standing forward fold, and as its own class cross-validation predicted
+  42 of its 52 images as `forward_bend` (F1 0.105).
+- `dandasana` (Surya plank) is excluded: 6 usable images after
+  deduplication, 1 predicted correctly. The app hides "Test This Pose" for
+  that step.
+- `ashwa_sanchalanasana` stays separate (its confusions are with cobra, not
+  low lunge) and now has its own correction rules — it used to borrow Low
+  Lunge's "raise your arms overhead" cue, which is wrong with hands down.
 
-| model | accuracy | macro F1 (18 measurable classes) | butterfly | cobra | seated twist |
-|---|---|---|---|---|---|
-| previous (cropped features, uncleaned data) | 0.829 | 0.746 | 0.354 | 0.910 | 0.596 |
-| current (`--augment-mirror`, cleaned data) | **0.865** | **0.787** | **0.554** | **0.942** | **0.614** |
+### Results
+
+Two measurements, because neither alone is enough:
+
+- **Leak-free test set** — 1,591 test images remain after cleaning. Every
+  test image of `upward_dog` and of the Surya-only classes was a copy of a
+  training image, so 6 of the 24 classes have no held-out test images.
+- **5-fold grouped cross-validation** (`--cv 5 --augment-mirror`) — scores all
+  classes; each estimate averages 5 models, so it is less sensitive to one
+  training run's luck than the single test-set model.
+
+| model | test acc | test macro F1 (18 classes) | CV acc | CV macro F1 | butterfly (test) | cobra (test) | seated twist (test) |
+|---|---|---|---|---|---|---|---|
+| original (cropped features, uncleaned data) | 0.829 | 0.746 | — | — | 0.354 | 0.910 | 0.596 |
+| cleaned + mirror, 26 classes | **0.865** | **0.787** | 0.762 | 0.642 | 0.554 | **0.942** | 0.614 |
+| **shipped:** cleaned + mirror, 24 classes | 0.842 | 0.778 | **0.777** | **0.710** | **0.615** | 0.907 | **0.646** |
+
+The 24-class model is shipped on the cross-validation evidence: on the 23
+classes both versions share, CV macro F1 is 0.691 → 0.706 (12 of 23 classes
+improve), and `forward_bend` gains most (0.676 → 0.785). Its lower single-run
+test accuracy is mostly `warrior_pose` (test F1 0.889 → 0.766, while its CV F1
+only moves 0.813 → 0.793) — run-to-run variance, see the note below.
 
 Scores published here before this cleanup were computed on the leaky test
 set and overstate generalization.
 
-### Per-class estimates for every class (cross-validation)
+### Per-class weak spots (cross-validation)
 
-`python train_movenet_classifier.py --cv 5 --augment-mirror` predicts every
-training sample with a model that never saw it or its group, so it scores the
-8 classes the test folder can't. "served" is the share of a class the API
-reports correctly *above the confidence cutoff* — what a user experiences.
+"served" is the share of a class the API reports correctly *above the
+confidence cutoff* (0.70) — what a user experiences in image mode. The
+weakest classes are all short on unique data after deduplication:
 
-Overall: accuracy 0.762, macro F1 0.642. The weakest classes, all short on
-unique data after deduplication:
-
-| class | n | F1 | served @ 0.70 | served @ 0.60 |
-|---|---|---|---|---|
-| seated_twist | 160 | 0.544 | 0.069 | 0.212 |
-| upward_dog | 224 | 0.388 | 0.062 | 0.179 |
-| cobra_pose | 430 | 0.579 | 0.209 | 0.363 |
-| butterfly_pose | 259 | 0.591 | 0.259 | 0.344 |
-| pranamasana | 46 | 0.539 | 0.174 | 0.304 |
-| hasta_padasana | 52 | 0.105 | — | — |
-| dandasana | 6 | 0.000 | — | — |
+| class | n | CV F1 | served |
+|---|---|---|---|
+| upward_dog | 224 | 0.360 | 0.076 |
+| ashwa_sanchalanasana | 47 | 0.378 | 0.255 |
+| hasta_uttanasana | 55 | 0.475 | 0.073 |
+| pranamasana | 46 | 0.533 | 0.109 |
+| seated_twist | 160 | 0.589 | 0.056 |
+| butterfly_pose | 259 | 0.620 | 0.232 |
+| cobra_pose | 430 | 0.626 | 0.191 |
 
 **Confidence cutoffs.** Single images keep `MIN_CLASS_PROB = 0.70`
-(93.1% of reported poses correct, 61.8% of frames reported). Live frames use
-`MIN_CLASS_PROB_LIVE = 0.60` because they also pass the 3-of-5 stability vote:
-simulated on the out-of-fold predictions, report precision stays ~95% while
-the share of windows with a reported pose rises from 47% to 55%. The
-simulation treats frames as independent; real consecutive frames are
-correlated, so the vote filters somewhat less than that in practice.
+(93.1% of reported poses correct, 61.8% of frames reported, on out-of-fold
+predictions). Live frames use `MIN_CLASS_PROB_LIVE = 0.60` because they also
+pass the 3-of-5 stability vote: simulated on out-of-fold predictions, report
+precision stays ~95% while the share of windows with a reported pose rises
+from 47% to 55% (seated twist served 7% → 21%). The simulation treats frames
+as independent; real consecutive frames are correlated, so the vote filters
+somewhat less than that in practice.
 
 **What would actually fix the weak classes is more unique training images**
-(and fresh test images for the 8 classes the test folder can't score).
+(and fresh test images for the classes the test folder can't score).
 
-### Label space — 26 classes
+### Label space — 24 classes
 
 Folder names are normalized to canonical labels by `utils/label_utils.py`, which
 merges duplicates (`Trikonasana` / `traingle` / `triangle` → `triangle_pose`;
