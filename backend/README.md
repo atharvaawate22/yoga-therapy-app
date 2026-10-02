@@ -43,11 +43,14 @@ by construction rather than by convention.
 
 ```bash
 python train_movenet_classifier.py --augment-mirror   # extract (cached), split, train
-python eval_pose_metrics.py                           # held-out test metrics
+python train_movenet_classifier.py --cv 5 --augment-mirror   # per-class CV report
+python eval_pose_metrics.py                           # leak-free test set
+python fetch_wikimedia_testset.py                     # independent test photos (once)
+python eval_pose_metrics.py --test-root dataset_wikimedia
 ```
 
 Feature extraction over the full dataset is cached to
-`models/feature_cache.npz`; later runs reuse it. `--rebuild-cache` forces
+`models/feature_cache_<variant>.npz`; later runs reuse it. `--rebuild-cache` forces
 re-extraction (required after any preprocessing, label-space or data-cleaning
 change). Images are decoded with the same `utils.preprocessing.decode_image`
 the server uses (EXIF rotation, downscale), then padded to a square.
@@ -90,57 +93,67 @@ its summary line:
 
 ### Results
 
-Two measurements, because neither alone is enough:
+Three measurements, because no single one is enough:
 
-- **Leak-free test set** — 1,591 test images remain after cleaning. Every
-  test image of `upward_dog` and of the Surya-only classes was a copy of a
-  training image, so 6 of the 24 classes have no held-out test images.
 - **5-fold grouped cross-validation** (`--cv 5 --augment-mirror`) — scores all
-  classes; each estimate averages 5 models, so it is less sensitive to one
-  training run's luck than the single test-set model.
+  24 classes; each estimate averages 5 models, so one training run's luck
+  matters less.
+- **Leak-free test set** — the original test folder minus copies of training
+  images. 6 of the 24 classes have no test images left in it.
+- **Wikimedia Commons test set** — 238 freely licensed photos from a different
+  source than all training data, hand-reviewed and checked for near-duplicates
+  of training images (`fetch_wikimedia_testset.py`). Small (1–25 per class),
+  so per-class numbers are noisy; useful as an independent overall check.
 
-| model | test acc | test macro F1 (18 classes) | CV acc | CV macro F1 | butterfly (test) | cobra (test) | seated twist (test) |
-|---|---|---|---|---|---|---|---|
-| original (cropped features, uncleaned data) | 0.829 | 0.746 | — | — | 0.354 | 0.910 | 0.596 |
-| cleaned + mirror, 26 classes | **0.865** | **0.787** | 0.762 | 0.642 | 0.554 | **0.942** | 0.614 |
-| **shipped:** cleaned + mirror, 24 classes | 0.842 | 0.778 | **0.777** | **0.710** | **0.615** | 0.907 | **0.646** |
+| model | CV acc | CV macro F1 | test acc | test macro F1 (18 cl.) | Wikimedia acc | Wikimedia macro F1 |
+|---|---|---|---|---|---|---|
+| original (cropped features, uncleaned data) | — | — | 0.829 | 0.746 | — | — |
+| cleaned + mirror, 24 classes, MoveNet Lightning | 0.777 | 0.710 | 0.842 | 0.778 | 0.793 | 0.611 |
+| **shipped:** same, **MoveNet Thunder** | **0.822** | **0.782** | **0.889** | **0.828** | **0.800** | **0.652** |
 
-The 24-class model is shipped on the cross-validation evidence: on the 23
-classes both versions share, CV macro F1 is 0.691 → 0.706 (12 of 23 classes
-improve), and `forward_bend` gains most (0.676 → 0.785). Its lower single-run
-test accuracy is mostly `warrior_pose` (test F1 0.889 → 0.766, while its CV F1
-only moves 0.813 → 0.793) — run-to-run variance, see the note below.
+Per class, for the poses that were weakest at the start (F1):
 
-Scores published here before this cleanup were computed on the leaky test
+| class | original (test) | Lightning (CV) | **Thunder (CV)** | Thunder (test) | Thunder (Wikimedia) |
+|---|---|---|---|---|---|
+| butterfly_pose | 0.354 | 0.620 | **0.696** | 0.779 | 0.875 |
+| seated_twist | 0.596 | 0.589 | **0.729** | 0.752 | 0.846 |
+| cobra_pose | 0.910 | 0.626 | **0.654** | 0.976 | 0.593 |
+| upward_dog | — | 0.360 | **0.480** | — | 0.364 |
+
+**Why Thunder.** MoveNet Thunder (256px input) finds keypoints more accurately
+than Lightning (192px), especially for floor poses, and wins on all three
+measurements overall. It costs ~27 ms per frame vs ~7 ms (local CPU), small
+next to the network round trip. Select a variant with `MOVENET_VARIANT`
+(default `thunder`); the classifier must be trained on the same variant's
+keypoints, and each variant has its own feature cache.
+
+Scores published here before the data cleanup were computed on the leaky test
 set and overstate generalization.
 
-### Per-class weak spots (cross-validation)
+### Per-class weak spots (cross-validation, Thunder)
 
 "served" is the share of a class the API reports correctly *above the
-confidence cutoff* (0.70) — what a user experiences in image mode. The
-weakest classes are all short on unique data after deduplication:
+confidence cutoff* (0.70) — what a user experiences in image mode:
 
 | class | n | CV F1 | served |
 |---|---|---|---|
-| upward_dog | 224 | 0.360 | 0.076 |
-| ashwa_sanchalanasana | 47 | 0.378 | 0.255 |
-| hasta_uttanasana | 55 | 0.475 | 0.073 |
-| pranamasana | 46 | 0.533 | 0.109 |
-| seated_twist | 160 | 0.589 | 0.056 |
-| butterfly_pose | 259 | 0.620 | 0.232 |
-| cobra_pose | 430 | 0.626 | 0.191 |
+| upward_dog | 217 | 0.480 | 0.078 |
+| ashwa_sanchalanasana | 47 | 0.468 | 0.191 |
+| hasta_uttanasana | 52 | 0.639 | 0.154 |
+| cobra_pose | 459 | 0.654 | 0.386 |
+| butterfly_pose | 277 | 0.696 | 0.357 |
+| seated_twist | 170 | 0.729 | 0.400 |
 
-**Confidence cutoffs.** Single images keep `MIN_CLASS_PROB = 0.70`
-(93.1% of reported poses correct, 61.8% of frames reported, on out-of-fold
-predictions). Live frames use `MIN_CLASS_PROB_LIVE = 0.60` because they also
-pass the 3-of-5 stability vote: simulated on out-of-fold predictions, report
-precision stays ~95% while the share of windows with a reported pose rises
-from 47% to 55% (seated twist served 7% → 21%). The simulation treats frames
-as independent; real consecutive frames are correlated, so the vote filters
-somewhat less than that in practice.
+**Confidence cutoffs.** Single images use `MIN_CLASS_PROB = 0.70`: on
+out-of-fold predictions 94.3% of reported poses are correct and 70.4% of
+frames get a pose. Live frames use `MIN_CLASS_PROB_LIVE = 0.60` because they
+also pass the 3-of-5 stability vote: simulated on out-of-fold predictions,
+report precision stays above 99% while a pose is reported in 72% of windows
+(62% at 0.70). The simulation treats frames as independent; real consecutive
+frames are correlated, so the vote filters less than that in practice.
 
-**What would actually fix the weak classes is more unique training images**
-(and fresh test images for the classes the test folder can't score).
+**What would fix the remaining weak classes is more unique training images**
+— see `docs/RECORDING_GUIDE.md` and `extract_video_frames.py`.
 
 ### Label space — 24 classes
 

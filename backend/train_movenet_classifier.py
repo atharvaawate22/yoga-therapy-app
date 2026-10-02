@@ -39,7 +39,7 @@ from utils.model import (
     train_classifier,
 )
 from utils.movenet import MoveNetRuntime
-from utils.paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MODELS_DIR
+from utils.paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MODELS_DIR, MOVENET_VARIANT
 from utils.preprocessing import mirror_features
 from utils.splits import grouped_stratified_kfold, grouped_stratified_split
 
@@ -47,7 +47,8 @@ logger = logging.getLogger("train")
 
 MIN_SAMPLES = 20
 MIN_CLASSES = 2
-FEATURE_CACHE = MODELS_DIR / "feature_cache.npz"
+# Features depend on the keypoint model, so each variant has its own cache.
+FEATURE_CACHE = MODELS_DIR / f"feature_cache_{MOVENET_VARIANT}.npz"
 
 
 def parse_args() -> argparse.Namespace:

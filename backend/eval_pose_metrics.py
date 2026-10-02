@@ -13,6 +13,7 @@ the preprocessing the server applies.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import logging
 import sys
 from typing import List, Tuple
@@ -22,7 +23,7 @@ import numpy as np
 from utils.dataset import build_feature_dataset, image_hashes
 from utils.model import load_classifier, load_labels
 from utils.movenet import MoveNetRuntime
-from utils.paths import TEST_DATASET_DIR
+from utils.paths import BASE_DIR, TEST_DATASET_DIR
 
 logger = logging.getLogger("eval")
 
@@ -110,8 +111,10 @@ def confusion_metrics(
     }
 
 
-def print_report(labels: List[str], metrics: dict, evaluated: int, skew: dict) -> None:
-    print(f"\nTest root : {TEST_DATASET_DIR}")
+def print_report(
+    labels: List[str], metrics: dict, evaluated: int, skew: dict, test_root=TEST_DATASET_DIR
+) -> None:
+    print(f"\nTest root : {test_root}")
     print(f"Evaluated : {evaluated} samples")
     print(f"Skipped   : {skew['no_body']} no-body, {skew['unreadable']} unreadable, "
           f"{skew['untrained_class']} in untrained classes")
@@ -146,9 +149,17 @@ def print_report(labels: List[str], metrics: dict, evaluated: int, skew: dict) -
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--test-root",
+        type=Path,
+        default=TEST_DATASET_DIR,
+        help="folder of <pose>/ test images; relative paths are under backend/ "
+             "(e.g. dataset_test, written by extract_video_frames.py)",
+    )
     parser.add_argument("--limit-per-class", type=int, default=None)
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
+    test_root = args.test_root if args.test_root.is_absolute() else BASE_DIR / args.test_root
 
     logging.basicConfig(
         level=args.log_level.upper(),
@@ -164,13 +175,13 @@ def main() -> int:
     train_hashes = image_hashes()
     features = build_feature_dataset(
         movenet,
-        roots=[TEST_DATASET_DIR],
+        roots=[test_root],
         limit_per_class=args.limit_per_class,
         exclude_hashes=train_hashes,
     )
     logger.info("Test extraction: %s", features.stats.summary())
     if features.is_empty:
-        logger.error("No usable test samples found under %s", TEST_DATASET_DIR)
+        logger.error("No usable test samples found under %s", test_root)
         return 1
 
     stats = features.stats
@@ -196,6 +207,7 @@ def main() -> int:
             "unreadable": stats.skipped_unreadable,
             "untrained_class": untrained,
         },
+        test_root=test_root,
     )
     return 0
 
