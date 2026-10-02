@@ -10,10 +10,12 @@ tests fast and lets the API be imported without the ML runtime present.
 
 from __future__ import annotations
 
+import io
 from typing import Tuple
 
 import cv2
 import numpy as np
+from PIL import Image, ImageOps
 
 __all__ = [
     "FEATURE_DIM",
@@ -21,6 +23,9 @@ __all__ = [
     "KEYPOINT_NAMES",
     "SKELETON_EDGES",
     "SKELETON_DRAW_MIN_SCORE",
+    "MAX_DECODE_SIDE",
+    "decode_image",
+    "mirror_features",
     "pad_to_square",
     "preprocess_for_movenet",
     "extract_keypoints_pixels",
@@ -77,6 +82,35 @@ MAJOR_KEYPOINTS = (0, 5, 6, 11, 12, 13, 14, 15, 16)
 CORE_MIN_SCORE = 0.20
 MAJOR_MIN_SCORE = 0.15
 MIN_MAJOR_VISIBLE = 7
+
+
+# Decoded images are downscaled to this longest side. MoveNet only sees a
+# 192px square, so extra resolution buys nothing but decode time.
+MAX_DECODE_SIDE = 1280
+
+
+def decode_image(data: bytes) -> np.ndarray:
+    """Encoded image bytes -> upright BGR array, longest side <= MAX_DECODE_SIDE.
+
+    Phone camera/gallery JPEGs store pixels in the sensor's native orientation
+    and record the rotation to apply as an EXIF Orientation tag, which
+    cv2.imdecode/imread ignore -- a portrait photo then decodes sideways.
+    PIL's exif_transpose bakes the rotation into the pixels first.
+
+    The server and the training/eval feature extraction both decode through
+    here, so a model is trained on images decoded exactly as it is served them.
+    Raises ``ValueError`` if the bytes are not a decodable image.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as pil_image:
+            pil_image = ImageOps.exif_transpose(pil_image)
+            pil_image.thumbnail((MAX_DECODE_SIDE, MAX_DECODE_SIDE))
+            rgb = np.array(pil_image.convert("RGB"))
+    except Exception as exc:
+        raise ValueError("Could not decode image") from exc
+    if rgb.size == 0:
+        raise ValueError("Could not decode image")
+    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
 
 def pad_to_square(image: np.ndarray) -> np.ndarray:
@@ -157,6 +191,27 @@ def normalize_keypoints(keypoints: np.ndarray) -> np.ndarray:
 
     normalized = (keypoints[:, :2] - hip_mid) / torso
     return normalized.astype(np.float32).reshape(-1)
+
+
+# Index pairs that swap when a person is mirrored left-to-right.
+MIRROR_PAIRS = ((1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16))
+_MIRROR_ORDER = np.arange(NUM_KEYPOINTS)
+for _left, _right in MIRROR_PAIRS:
+    _MIRROR_ORDER[_left], _MIRROR_ORDER[_right] = _right, _left
+
+
+def mirror_features(features: np.ndarray) -> np.ndarray:
+    """Left-right mirror normalized feature vectors (training augmentation).
+
+    Accepts one ``(34,)`` vector or a ``(n, 34)`` batch from
+    ``normalize_keypoints``. Negates x (the origin is the hip midpoint, so
+    this mirrors about the body's centre) and swaps every left/right joint,
+    giving the same pose performed to the other side.
+    """
+    batch = np.asarray(features, dtype=np.float32).reshape(-1, NUM_KEYPOINTS, 2)
+    mirrored = batch[:, _MIRROR_ORDER, :].copy()
+    mirrored[:, :, 0] *= -1.0
+    return mirrored.reshape(np.shape(features))
 
 
 def has_body(keypoints: np.ndarray) -> bool:

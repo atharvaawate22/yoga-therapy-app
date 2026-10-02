@@ -1,6 +1,6 @@
 """MoveNet + MLP classifier backend for yoga pose analysis.
 
-Pipeline: base64 frame -> square crop -> MoveNet keypoints -> body-presence
+Pipeline: base64 frame -> padded square -> MoveNet keypoints -> body-presence
 gate -> normalized 34-vector -> MLP -> confidence gate -> temporal stability
 filter -> rule-based corrections.
 
@@ -15,7 +15,6 @@ keeps import cheap and lets tests substitute stubs via
 from __future__ import annotations
 
 import base64
-import io
 import logging
 import os
 import threading
@@ -27,7 +26,6 @@ import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 from utils.dataset import build_feature_dataset
@@ -46,7 +44,9 @@ from utils.preprocessing import (
     KEYPOINT_NAMES,
     MAJOR_KEYPOINTS,
     SKELETON_DRAW_MIN_SCORE,
+    MAX_DECODE_SIDE,
     SKELETON_EDGES,
+    decode_image,
     extract_keypoints_pixels,
     has_body,
     normalize_keypoints,
@@ -64,6 +64,12 @@ logger = logging.getLogger("yoga_pose_engine")
 # ── Decision thresholds ───────────────────────────────────────────────────
 # Below this softmax probability we decline to name a pose rather than guess.
 MIN_CLASS_PROB = 0.70
+# Live frames also pass the stability vote below, which filters one-off wrong
+# frames, so they can use a lower cutoff. On out-of-fold predictions (5-fold
+# grouped CV) 0.60 vs 0.70 with the vote kept report precision ~95% while
+# poses were reported in 55% vs 47% of windows (seated twist: 21% vs 7%).
+# Single images have no vote and keep the stricter cutoff.
+MIN_CLASS_PROB_LIVE = 0.60
 # Live mode only: a pose must win a majority of the recent window to be
 # reported, which stops the label flickering during transitions.
 STABILITY_WINDOW = 5
@@ -80,10 +86,6 @@ BOOTSTRAP_MIN_SAMPLES = 30
 
 VALID_EXPERIENCE_LEVELS = {"beginner", "intermediate", "expert"}
 
-# Uploads are downscaled to this longest side on decode. MoveNet only sees a
-# 192px square, so extra resolution buys nothing but decode and encode time
-# (older app builds send full 12MP+ camera frames).
-MAX_DECODE_SIDE = 1280
 MAX_IMAGE_BASE64_CHARS = 4_000_000
 
 
@@ -280,23 +282,11 @@ def _decode_base64_image(image_b64: str) -> np.ndarray:
         buffer = base64.b64decode(image_b64, validate=False)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid base64 image payload") from exc
-    # Phone camera/gallery JPEGs store pixels in the sensor's native
-    # orientation and record the rotation the viewer should apply as an EXIF
-    # Orientation tag. cv2.imdecode ignores that tag entirely, so a portrait
-    # photo decodes sideways and the center-crop below then cuts off most of
-    # the body before MoveNet ever sees it. PIL's exif_transpose bakes the
-    # rotation into the pixels first.
+    # Shared with training feature extraction (EXIF rotation + downscale).
     try:
-        with Image.open(io.BytesIO(buffer)) as pil_image:
-            pil_image = ImageOps.exif_transpose(pil_image)
-            pil_image.thumbnail((MAX_DECODE_SIDE, MAX_DECODE_SIDE))
-            rgb_image = pil_image.convert("RGB")
-            image = cv2.cvtColor(np.array(rgb_image), cv2.COLOR_RGB2BGR)
-    except Exception as exc:
+        return decode_image(buffer)
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail="Could not decode image") from exc
-    if image is None or image.size == 0:
-        raise HTTPException(status_code=400, detail="Could not decode image")
-    return image
 
 
 def _describe_gate_failure(keypoints: np.ndarray) -> str:
@@ -784,7 +774,9 @@ def analyze_pose(
     best_pose = max(probabilities, key=probabilities.get)
     best_prob = float(probabilities[best_pose])
 
-    candidate_pose = best_pose if best_prob >= MIN_CLASS_PROB else NO_POSE
+    is_live = payload.source == "live" and bool(payload.session_id)
+    min_prob = MIN_CLASS_PROB_LIVE if is_live else MIN_CLASS_PROB
+    candidate_pose = best_pose if best_prob >= min_prob else NO_POSE
     if best_pose in {UNKNOWN, NO_POSE}:
         candidate_pose = NO_POSE
 

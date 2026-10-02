@@ -158,3 +158,35 @@ def test_a_few_faint_limbs_still_pass() -> None:
     output = make_movenet_output(score=0.9, overrides=faded_ankles)
 
     assert has_body(keypoints_from(output)) is True
+
+
+# ── Mirror augmentation ───────────────────────────────────────────────────
+
+
+def test_mirror_swaps_sides_and_negates_x() -> None:
+    from utils.preprocessing import mirror_features
+
+    kp = np.zeros((17, 3), dtype=np.float32)
+    kp[:, 2] = 1.0
+    kp[5, :2] = (-30, -100)   # left shoulder
+    kp[6, :2] = (40, -100)    # right shoulder
+    kp[11, :2] = (-20, 0)     # left hip
+    kp[12, :2] = (20, 0)      # right hip
+    kp[9, :2] = (-80, -60)    # left wrist out to the side
+    features = normalize_keypoints(kp).reshape(17, 2)
+
+    mirrored = mirror_features(features.reshape(-1)).reshape(17, 2)
+
+    np.testing.assert_allclose(mirrored[6], [-features[5, 0], features[5, 1]])
+    np.testing.assert_allclose(mirrored[10], [-features[9, 0], features[9, 1]])
+    np.testing.assert_allclose(mirrored[0], [-features[0, 0], features[0, 1]])
+
+
+def test_mirror_twice_is_identity_and_keeps_batch_shape() -> None:
+    from utils.preprocessing import mirror_features
+
+    batch = np.random.default_rng(1).normal(size=(5, 34)).astype(np.float32)
+    once = mirror_features(batch)
+
+    assert once.shape == (5, 34)
+    np.testing.assert_allclose(mirror_features(once), batch)

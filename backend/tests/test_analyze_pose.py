@@ -329,3 +329,20 @@ def test_session_vote_history_is_bounded(monkeypatch) -> None:
 def test_health_does_not_expose_filesystem_paths(client: TestClient) -> None:
     body = client.get("/health").json()
     assert not any("path" in key for key in body)
+
+
+def test_live_frames_use_the_lower_cutoff_behind_the_vote(make_client, sample_image_base64) -> None:
+    """0.65 is below the single-image cutoff but above the live one."""
+    import yoga_pose_engine as engine
+
+    assert engine.MIN_CLASS_PROB_LIVE < 0.65 < engine.MIN_CLASS_PROB
+    client = make_client(classifier=StubClassifier({"tree_pose": 0.65, "chair_pose": 0.35}))
+
+    still = client.post(ANALYZE, json=payload(sample_image_base64, source="image")).json()
+    live = [
+        client.post(ANALYZE, json=payload(sample_image_base64, source="live", session_id="v")).json()
+        for _ in range(3)
+    ]
+
+    assert still["pose"] == "nopose"
+    assert live[-1]["pose"] == "tree_pose", "3 agreeing live frames clear the vote"

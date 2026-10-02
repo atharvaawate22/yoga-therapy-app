@@ -36,6 +36,7 @@ __all__ = [
     "SplitReport",
     "infer_group_key",
     "grouped_stratified_split",
+    "grouped_stratified_kfold",
 ]
 
 # Frames whose index falls in the same chunk stay together. Large enough to
@@ -200,3 +201,45 @@ def grouped_stratified_split(
         report.n_groups,
     )
     return train_arr, val_arr, report
+
+
+def grouped_stratified_kfold(
+    y: np.ndarray,
+    groups: Sequence[str],
+    k: int = 5,
+    seed: int = 42,
+) -> List[np.ndarray]:
+    """Assign every sample to one of ``k`` folds, keeping groups whole.
+
+    Within each class its groups are shuffled deterministically and each is
+    placed in the fold that currently holds the fewest of that class's
+    samples, so every class is spread across folds as evenly as its group
+    sizes allow. Returns the sample indices of each fold.
+
+    Used for cross-validation: each fold is predicted by a model trained on
+    the other ``k - 1``, which scores every class -- including ones whose
+    official test images turned out to be copies of training images.
+    """
+    if k < 2:
+        raise ValueError("k must be at least 2")
+    y = np.asarray(y)
+    groups = np.asarray(groups)
+    rng = np.random.default_rng(seed)
+    fold_of = np.empty(len(y), dtype=np.int64)
+
+    for cls in np.unique(y):
+        members = np.flatnonzero(y == cls)
+        by_group: Dict[str, List[int]] = defaultdict(list)
+        for idx in members:
+            by_group[str(groups[idx])].append(int(idx))
+        keys = sorted(by_group)
+        rng.shuffle(keys)
+        # Largest groups first gives a tighter balance.
+        keys.sort(key=lambda g: -len(by_group[g]))
+        load = np.zeros(k, dtype=np.int64)
+        for key in keys:
+            target = int(np.argmin(load))
+            fold_of[by_group[key]] = target
+            load[target] += len(by_group[key])
+
+    return [np.flatnonzero(fold_of == f) for f in range(k)]

@@ -17,14 +17,14 @@ def test_loads_the_shipped_model_and_matches_the_label_count() -> None:
     model = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATH)
     labels = json.loads(LABELS_PATH.read_text(encoding="utf-8"))
 
-    probs = model.predict(np.zeros((1, 34), dtype=np.float32))
+    probs = model.predict(np.zeros((1, model.input_dim), dtype=np.float32))
 
     assert probs.shape == (1, len(labels))
 
 
 def test_outputs_are_probability_distributions() -> None:
     model = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATH)
-    x = np.random.default_rng(0).normal(0, 1.5, size=(64, 34)).astype(np.float32)
+    x = np.random.default_rng(0).normal(0, 1.5, size=(64, model.input_dim)).astype(np.float32)
 
     probs = model.predict(x)
 

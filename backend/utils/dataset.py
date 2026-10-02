@@ -7,17 +7,19 @@ the server applies to a camera frame.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-import cv2
 import numpy as np
 
-from .label_utils import is_excluded_label, normalize_label
+from .label_utils import CANONICAL_LABELS, is_excluded_label, normalize_label
 from .paths import IMAGE_PATTERNS, LEGACY_TRAIN_DIR, TRAIN_DATASET_DIR
 from .preprocessing import (
+    decode_image,
     extract_keypoints_pixels,
     has_body,
     normalize_keypoints,
@@ -32,6 +34,7 @@ __all__ = [
     "FeatureSet",
     "discover_class_dirs",
     "build_feature_dataset",
+    "image_hashes",
 ]
 
 
@@ -44,6 +47,9 @@ class DatasetStats:
     skipped_unreadable: int = 0
     skipped_no_body: int = 0
     skipped_excluded_class: int = 0
+    skipped_label_conflict: int = 0
+    skipped_duplicate: int = 0
+    skipped_in_train: int = 0
     per_class_kept: Dict[str, int] = field(default_factory=dict)
 
     @property
@@ -59,6 +65,12 @@ class DatasetStats:
         ]
         if self.skipped_excluded_class:
             parts.append(f"{self.skipped_excluded_class} in excluded classes")
+        if self.skipped_label_conflict:
+            parts.append(f"{self.skipped_label_conflict} label conflicts")
+        if self.skipped_duplicate:
+            parts.append(f"{self.skipped_duplicate} duplicates")
+        if self.skipped_in_train:
+            parts.append(f"{self.skipped_in_train} also in the training set")
         return f"{parts[0]}; " + ", ".join(parts[1:])
 
 
@@ -105,12 +117,41 @@ def discover_class_dirs(roots: Optional[Sequence[Path]] = None) -> List[Path]:
     return class_dirs
 
 
+# The synthetic 3D-render part of the dataset names files
+# `<actor><n>_<pose><frame>` (e.g. `guy2_cobra065.jpg`). Copies of those frames
+# were also filed under other poses' folders -- 200 cobra frames sat in the
+# upward-dog training folder as byte-identical duplicates of files in
+# `cobra/`, i.e. the same image labelled both ways.
+_SYNTHETIC_NAME = re.compile(r"^[A-Za-z]+\d*_([A-Za-z]+?)\d+")
+
+
+def filename_label_conflict(image_path: Path, folder_label: str) -> Optional[str]:
+    """The pose a synthetic frame's filename names, if it contradicts its folder."""
+    match = _SYNTHETIC_NAME.match(image_path.stem)
+    if not match:
+        return None
+    named = normalize_label(match.group(1))
+    if named in CANONICAL_LABELS and named != folder_label:
+        return named
+    return None
+
+
+def image_hashes(roots: Optional[Sequence[Path]] = None) -> Set[str]:
+    """MD5 of every image under the class folders of ``roots`` (default: training)."""
+    return {
+        hashlib.md5(path.read_bytes()).hexdigest()
+        for class_dir in discover_class_dirs(roots)
+        for path in _iter_images(class_dir)
+    }
+
+
 def build_feature_dataset(
     movenet,
     roots: Optional[Sequence[Path]] = None,
     limit_per_class: Optional[int] = None,
     log_every: int = 500,
     sequence_chunk: int = DEFAULT_SEQUENCE_CHUNK,
+    exclude_hashes: Optional[Set[str]] = None,
 ) -> FeatureSet:
     """Extract normalized keypoint features for every labelled image.
 
@@ -119,6 +160,10 @@ def build_feature_dataset(
 
     Each row carries a group id derived from its filename so the caller can
     split without putting flip-twins or adjacent video frames on both sides.
+
+    ``exclude_hashes`` (from ``image_hashes``) skips images whose exact bytes
+    are in that set -- the evaluator passes the training set's hashes so a
+    copied image can't be scored as "held out".
     """
     class_dirs = discover_class_dirs(roots)
     stats = DatasetStats()
@@ -162,6 +207,9 @@ def build_feature_dataset(
     x_data: List[np.ndarray] = []
     y_data: List[int] = []
     group_data: List[str] = []
+    # Content hash -> label of the first copy seen. Byte-identical copies are
+    # counted once; a copy under a *different* label is a conflict.
+    seen: Dict[str, str] = {}
 
     for class_dir in class_dirs:
         label = normalize_label(class_dir.name)
@@ -172,12 +220,33 @@ def build_feature_dataset(
 
         for image_path in image_paths:
             stats.total_images += 1
-            image_bgr = cv2.imread(str(image_path))
-            if image_bgr is None:
+            if filename_label_conflict(image_path, label):
+                stats.skipped_label_conflict += 1
+                continue
+            try:
+                data = image_path.read_bytes()
+            except OSError:
                 stats.skipped_unreadable += 1
                 continue
-
-            # Identical to the serving path — this is the skew fix.
+            digest = hashlib.md5(data).hexdigest()
+            if exclude_hashes and digest in exclude_hashes:
+                stats.skipped_in_train += 1
+                continue
+            if digest in seen:
+                if seen[digest] == label:
+                    stats.skipped_duplicate += 1
+                else:
+                    stats.skipped_label_conflict += 1
+                continue
+            seen[digest] = label
+            # Identical to the serving path (decode + preprocess) — this is
+            # the skew fix. cv2.imread here used to skip the server's EXIF
+            # rotation and downscale.
+            try:
+                image_bgr = decode_image(data)
+            except ValueError:
+                stats.skipped_unreadable += 1
+                continue
             _, image_rgb = preprocess_for_movenet(image_bgr)
             output = movenet.infer(image_rgb)
             keypoints = extract_keypoints_pixels(

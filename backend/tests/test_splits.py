@@ -209,3 +209,21 @@ def test_invalid_validation_fraction_is_rejected(bad: float) -> None:
 
     with pytest.raises(ValueError, match="val_fraction"):
         grouped_stratified_split(y, groups, labels, val_fraction=bad)
+
+
+def test_kfold_covers_every_sample_once_and_keeps_groups_whole() -> None:
+    from utils.splits import grouped_stratified_kfold
+
+    y = np.array([0] * 12 + [1] * 9)
+    groups = [f"a{i // 2}" for i in range(12)] + [f"b{i // 3}" for i in range(9)]
+
+    folds = grouped_stratified_kfold(y, groups, k=3, seed=1)
+
+    all_idx = np.concatenate(folds)
+    assert sorted(all_idx.tolist()) == list(range(len(y)))
+    for fold in folds:
+        assert {0, 1} <= set(y[fold].tolist()), "every class in every fold"
+    fold_of = {int(i): f for f, fold in enumerate(folds) for i in fold}
+    for g in set(groups):
+        members = [i for i, gg in enumerate(groups) if gg == g]
+        assert len({fold_of[i] for i in members}) == 1, f"group {g} split across folds"

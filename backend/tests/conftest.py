@@ -89,7 +89,7 @@ class StubClassifier:
         return bool(self.probabilities)
 
     def predict(self, normalized_flat: np.ndarray) -> Dict[str, float]:
-        assert normalized_flat.shape == (34,), "classifier expects a 34-vector"
+        assert normalized_flat.shape == (34,), "the runtime is handed the normalized 34-vector"
         return dict(self.probabilities)
 
 

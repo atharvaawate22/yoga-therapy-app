@@ -244,6 +244,10 @@ class NumpyClassifier:
             raise ValueError(f"No Dense layers found in {model_path}")
         return cls(layers)
 
+    @property
+    def input_dim(self) -> int:
+        return int(self.layers[0][0].shape[0])
+
     def predict(self, x: np.ndarray, verbose: int = 0) -> np.ndarray:  # noqa: ARG002
         out = np.asarray(x, dtype=np.float32)
         for kernel, bias, activation in self.layers:

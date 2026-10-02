@@ -19,7 +19,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from utils.dataset import build_feature_dataset
+from utils.dataset import build_feature_dataset, image_hashes
 from utils.model import load_classifier, load_labels
 from utils.movenet import MoveNetRuntime
 from utils.paths import TEST_DATASET_DIR
@@ -51,6 +51,21 @@ def align_to_trained_labels(
     mask = np.array(keep_mask, dtype=bool)
     aligned = np.array(remapped, dtype=np.int32)[mask]
     return mask, aligned, int((~mask).sum())
+
+
+def print_top_confusions(labels: List[str], conf: np.ndarray, k: int = 8) -> None:
+    """The most frequent true -> predicted mix-ups (off-diagonal cells)."""
+    off = conf.copy()
+    np.fill_diagonal(off, 0)
+    pairs = sorted(
+        ((int(off[t, p]), labels[t], labels[p]) for t, p in zip(*np.nonzero(off))),
+        reverse=True,
+    )[:k]
+    if not pairs:
+        return
+    print("\nMost common confusions (true -> predicted)")
+    for count, true_label, pred_label in pairs:
+        print(f"  {count:>4}  {true_label} -> {pred_label}")
 
 
 def confusion_metrics(
@@ -144,9 +159,16 @@ def main() -> int:
     model = load_classifier()
     movenet = MoveNetRuntime()
 
+    # 1183 of the 3425 test images are byte-identical copies of training
+    # images; scoring those measures memorization, not generalization.
+    train_hashes = image_hashes()
     features = build_feature_dataset(
-        movenet, roots=[TEST_DATASET_DIR], limit_per_class=args.limit_per_class
+        movenet,
+        roots=[TEST_DATASET_DIR],
+        limit_per_class=args.limit_per_class,
+        exclude_hashes=train_hashes,
     )
+    logger.info("Test extraction: %s", features.stats.summary())
     if features.is_empty:
         logger.error("No usable test samples found under %s", TEST_DATASET_DIR)
         return 1
@@ -164,6 +186,7 @@ def main() -> int:
     y_pred = np.argmax(probs, axis=1).astype(np.int32)
 
     metrics = confusion_metrics(y_true, y_pred, len(trained_labels))
+    print_top_confusions(trained_labels, metrics["confusion"])
     print_report(
         trained_labels,
         metrics,

@@ -40,7 +40,8 @@ from utils.model import (
 )
 from utils.movenet import MoveNetRuntime
 from utils.paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MODELS_DIR
-from utils.splits import grouped_stratified_split
+from utils.preprocessing import mirror_features
+from utils.splits import grouped_stratified_kfold, grouped_stratified_split
 
 logger = logging.getLogger("train")
 
@@ -68,6 +69,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Weight classes by inverse frequency (13x imbalance in this dataset).",
     )
+    parser.add_argument(
+        "--augment-mirror",
+        action="store_true",
+        help="Add a left-right mirrored copy of every training sample (the same "
+             "pose done to the other side). Applied after the split, so "
+             "validation stays unaugmented.",
+    )
+    parser.add_argument(
+        "--cv",
+        type=int,
+        default=0,
+        metavar="K",
+        help="Report grouped K-fold cross-validation metrics for every class "
+             "instead of training the shipped model (writes nothing).",
+    )
     parser.add_argument("--limit-per-class", type=int, default=None)
     parser.add_argument(
         "--legacy-split",
@@ -91,6 +107,10 @@ def load_or_extract(rebuild: bool, limit_per_class: Optional[int]) -> FeatureSet
             kept=int(cached["x"].shape[0]),
             skipped_unreadable=int(cached["skipped_unreadable"]),
             skipped_no_body=int(cached["skipped_no_body"]),
+            skipped_label_conflict=int(cached["skipped_label_conflict"])
+            if "skipped_label_conflict" in cached else 0,
+            skipped_duplicate=int(cached["skipped_duplicate"])
+            if "skipped_duplicate" in cached else 0,
             per_class_kept=dict(cached["per_class_kept"].item()),
         )
         return FeatureSet(
@@ -113,6 +133,8 @@ def load_or_extract(rebuild: bool, limit_per_class: Optional[int]) -> FeatureSet
             total_images=features.stats.total_images,
             skipped_unreadable=features.stats.skipped_unreadable,
             skipped_no_body=features.stats.skipped_no_body,
+            skipped_label_conflict=features.stats.skipped_label_conflict,
+            skipped_duplicate=features.stats.skipped_duplicate,
             per_class_kept=np.array(features.stats.per_class_kept, dtype=object),
         )
         logger.info("Cached features -> %s", FEATURE_CACHE)
@@ -167,6 +189,67 @@ def print_curve(history, every: int = 5) -> None:
     )
 
 
+# Mirrors yoga_pose_engine.MIN_CLASS_PROB (single images; live frames use a
+# lower cutoff behind the stability vote): below it the API reports "nopose".
+SERVING_MIN_CLASS_PROB = 0.70
+
+
+def cross_validate(features: FeatureSet, args: argparse.Namespace) -> np.ndarray:
+    """Out-of-fold predictions for every sample, scored per class.
+
+    The official test folder can't score every class (some classes' test images
+    are all copies of training images), so this is the per-class estimate.
+    "served" is the share of a class's samples the API would actually report
+    correctly: right label *and* confidence >= the serving threshold.
+    """
+    from eval_pose_metrics import confusion_metrics  # noqa: PLC0415
+
+    num_classes = len(features.labels)
+    folds = grouped_stratified_kfold(features.y, features.groups, k=args.cv, seed=args.seed)
+    probs = np.zeros((len(features.y), num_classes), dtype=np.float32)
+
+    for fold_idx, held_out in enumerate(folds):
+        train_idx = np.setdiff1d(np.arange(len(features.y)), held_out)
+        # Early stopping needs a validation set; carve it from the training
+        # folds (grouped), never from the held-out fold being scored.
+        inner_train, inner_val, _ = grouped_stratified_split(
+            features.y[train_idx], features.groups[train_idx], features.labels,
+            val_fraction=args.validation_split, seed=args.seed,
+        )
+        tr, va = train_idx[inner_train], train_idx[inner_val]
+        train_x, train_y = features.x[tr], features.y[tr]
+        if args.augment_mirror:
+            train_x = np.concatenate([train_x, mirror_features(train_x)])
+            train_y = np.concatenate([train_y, train_y])
+        model, _ = train_classifier(
+            train_x, train_y, num_classes=num_classes,
+            validation_data=(features.x[va], features.y[va]),
+            epochs=args.epochs, batch_size=args.batch_size,
+            dropout=args.dropout, l2=args.l2, patience=args.patience or None,
+            verbose=0,
+        )
+        probs[held_out] = model.predict(features.x[held_out], verbose=0)
+        print(f"fold {fold_idx + 1}/{args.cv}: {len(held_out)} samples scored", flush=True)
+
+    pred = probs.argmax(axis=1)
+    metrics = confusion_metrics(features.y, pred, num_classes)
+    served = (pred == features.y) & (probs.max(axis=1) >= SERVING_MIN_CLASS_PROB)
+
+    width = max(len(label) for label in features.labels)
+    print(f"\n{args.cv}-fold grouped cross-validation "
+          f"({'with' if args.augment_mirror else 'without'} mirror augmentation)")
+    print(f"accuracy {metrics['accuracy']:.3f}, macro F1 {metrics['macro_f1']:.3f}, "
+          f"served {served.mean():.3f}\n")
+    print(f"{'class'.ljust(width)}  {'prec':>6} {'rec':>6} {'f1':>6} {'served':>7} {'n':>5}")
+    print("-" * (width + 36))
+    for idx, label in enumerate(features.labels):
+        mask = features.y == idx
+        print(f"{label.ljust(width)}  {metrics['precision'][idx]:>6.3f} "
+              f"{metrics['recall'][idx]:>6.3f} {metrics['f1'][idx]:>6.3f} "
+              f"{served[mask].mean():>7.3f} {int(mask.sum()):>5}")
+    return probs
+
+
 def main() -> int:
     args = parse_args()
     logging.basicConfig(
@@ -186,6 +269,10 @@ def main() -> int:
     logger.info("Extraction: %s", features.stats.summary())
     logger.info("Classes (%d): %s", len(features.labels), ", ".join(features.labels))
     print_class_report(features)
+
+    if args.cv:
+        cross_validate(features, args)
+        return 0
 
     num_classes = len(features.labels)
     class_weight = (
@@ -221,9 +308,15 @@ def main() -> int:
         if report.single_group_classes:
             print(f"\nsingle-group classes (kept in train): {report.single_group_classes}")
 
+        train_x, train_y = features.x[train_idx], features.y[train_idx]
+        if args.augment_mirror:
+            train_x = np.concatenate([train_x, mirror_features(train_x)])
+            train_y = np.concatenate([train_y, train_y])
+            print(f"\nMirror augmentation: {len(train_idx)} -> {len(train_y)} training samples")
+
         model, history = train_classifier(
-            features.x[train_idx],
-            features.y[train_idx],
+            train_x,
+            train_y,
             num_classes=num_classes,
             validation_data=(features.x[val_idx], features.y[val_idx]),
             epochs=args.epochs,
