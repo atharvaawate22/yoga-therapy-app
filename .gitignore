@@ -16,10 +16,6 @@ dataset/
 # Derived: regenerate with `train_movenet_classifier.py --rebuild-cache`
 backend/models/feature_cache.npz
 
-# Claude Code local context
-.claude/
-CLAUDE.md
-
 # Expo
 .expo/
 dist/
