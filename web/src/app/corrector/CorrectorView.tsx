@@ -1,21 +1,26 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Camera } from "lucide-react";
+import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { poseById, poseDisplayName } from "@/content";
-import { APK_URL } from "@/lib/links";
+import { LiveCorrector } from "./LiveCorrector";
 import { PhotoCheck } from "./PhotoCheck";
 
-/**
- * The corrector: photo analysis works in the browser today; the live camera
- * mode arrives in M4.
- */
+type Mode = "live" | "photo";
+
+const MODES: ReadonlyArray<{ id: Mode; label: string }> = [
+  { id: "live", label: "Live" },
+  { id: "photo", label: "Photo" },
+];
+
+/** The pose corrector: live camera (or demo/video) and single-photo modes. */
 export function CorrectorView() {
   const params = useSearchParams();
   const pose = poseById(params.get("pose") ?? "");
   // Pose pages pass ?pose=<id>; Surya Namaskar steps pass ?label=<classifier label>.
   const targetLabel = pose?.id ?? params.get("label");
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "photo" ? "photo" : "live");
 
   return (
     <div className="flex flex-col gap-6">
@@ -25,23 +30,29 @@ export function CorrectorView() {
         backHref={pose ? `/poses/${pose.id}` : "/"}
       />
 
-      <PhotoCheck targetLabel={targetLabel} />
+      <div role="tablist" aria-label="Corrector mode" className="flex w-fit gap-1 rounded-xl bg-surface-alt p-1">
+        {MODES.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`tab-${id}`}
+            aria-selected={mode === id}
+            aria-controls={`panel-${id}`}
+            onClick={() => setMode(id)}
+            className={`rounded-lg px-5 py-2 font-semibold ${
+              mode === id ? "bg-primary text-on-primary" : "text-muted hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <section className="flex items-start gap-4 rounded-2xl border border-border bg-surface p-5">
-        <span className="bg-hero flex size-12 shrink-0 items-center justify-center rounded-xl">
-          <Camera aria-hidden="true" className="size-6" />
-        </span>
-        <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-bold">Live camera: coming next</h2>
-          <p className="text-muted">
-            Real-time corrections from your camera, spoken aloud while you hold the pose, also
-            running on this device. Until then, live mode is in the Android app.
-          </p>
-          <a href={APK_URL} className="w-fit font-semibold text-primary hover:underline">
-            Get the Android app
-          </a>
-        </div>
-      </section>
+      <div role="tabpanel" id={`panel-${mode}`} aria-labelledby={`tab-${mode}`}>
+        {/* Switching tabs unmounts the live view, which stops the camera. */}
+        {mode === "live" ? <LiveCorrector targetLabel={targetLabel} /> : <PhotoCheck targetLabel={targetLabel} />}
+      </div>
     </div>
   );
 }

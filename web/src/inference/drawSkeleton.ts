@@ -2,21 +2,26 @@ import { SKELETON_DRAW_MIN_SCORE, SKELETON_EDGES, keypointsFromMoveNet } from "p
 import { toFramePoint } from "./letterbox";
 
 /**
- * Draw `frame` onto `canvas` at its natural size with MoveNet's skeleton on
- * top. Joints below the server's drawing threshold are left out.
+ * Draw MoveNet's skeleton onto `canvas` at the frame's natural size. With a
+ * `frame`, it is painted underneath (a photo); with null, the canvas is
+ * cleared and only the skeleton drawn, as an overlay over a playing video.
+ * Joints below the server's drawing threshold are left out.
  */
 export function drawSkeleton(
   canvas: HTMLCanvasElement,
-  frame: CanvasImageSource,
+  frame: CanvasImageSource | null,
   width: number,
   height: number,
   raw: ArrayLike<number>,
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  canvas.width = width;
-  canvas.height = height;
-  ctx.drawImage(frame, 0, 0, width, height);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  if (frame) ctx.drawImage(frame, 0, 0, width, height);
+  else ctx.clearRect(0, 0, width, height);
 
   const points = keypointsFromMoveNet(raw).map((k) => ({
     ...toFramePoint(k.x, k.y, width, height),

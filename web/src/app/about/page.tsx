@@ -10,6 +10,7 @@ const ON_THE_WEB = [
   "Guided practice with timers and voice cues",
   "12-step Surya Namaskar rounds",
   "Custom routines, favorites, streaks and a 7-day activity chart",
+  "The pose corrector, live from your camera or on a photo, running entirely on your device",
 ];
 
 const PIPELINE = [
@@ -59,9 +60,11 @@ export default function AboutPage() {
           ))}
         </ul>
         <p className="mt-3 text-muted">
-          Coming next: the pose corrector running entirely in your browser (camera frames never leave
-          your device), then installing like an app and working offline. Until then the corrector is
-          in the Android app.
+          Coming next: installing like an app and working offline.{" "}
+          <Link href="/corrector?demo=1" className="font-semibold text-primary hover:underline">
+            Try the corrector demo
+          </Link>{" "}
+          (no camera needed).
         </p>
         <Link href="/" className="mt-3 inline-block font-semibold text-primary hover:underline">
           Open the web app →

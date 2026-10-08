@@ -24,6 +24,7 @@ export {
   toTorsoUnits,
 } from "./corrections";
 export type { Level } from "./corrections";
-export { StabilityVote } from "./stability";
+export { StabilityVote, TimeWindowVote } from "./stability";
+export type { Vote } from "./stability";
 export { NO_BODY_MESSAGE, SKELETON_DRAW_MIN_SCORE, analyzeFrame } from "./analyze";
 export type { Analysis, AnalyzeOptions } from "./analyze";

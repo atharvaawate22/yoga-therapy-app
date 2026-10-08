@@ -7,7 +7,7 @@ import type { PoseClassifier } from "./classifier";
 import { NO_POSE, UNKNOWN, distanceMetrics, generateCorrections, type Level } from "./corrections";
 import { hasBody, normalizeKeypoints } from "./features";
 import { keypointsFromMoveNet, type Keypoint } from "./keypoints";
-import type { StabilityVote } from "./stability";
+import type { Vote } from "./stability";
 
 /** Visualization threshold; a frame with no joint above it has no skeleton. */
 export const SKELETON_DRAW_MIN_SCORE = 0.25;
@@ -25,7 +25,9 @@ export interface AnalyzeOptions {
    * Live frames pass a vote and use the lower live cutoff. Without one the
    * frame is treated as a single image (stricter cutoff, no smoothing).
    */
-  vote?: StabilityVote;
+  vote?: Vote;
+  /** Frame time for time-based votes (defaults to now). */
+  timeMs?: number;
 }
 
 export interface Analysis {
@@ -69,7 +71,7 @@ export function analyzeFrame(raw: ArrayLike<number>, options: AnalyzeOptions): A
   let candidate = prediction.probability >= minProb ? prediction.label : NO_POSE;
   if (prediction.label === UNKNOWN || prediction.label === NO_POSE) candidate = NO_POSE;
 
-  const pose = vote ? vote.push(candidate) : candidate;
+  const pose = vote ? vote.push(candidate, options.timeMs) : candidate;
   const probabilities: Record<string, number> = {};
   classifier.artifact.labels.forEach((label, i) => {
     probabilities[label] = prediction.probabilities[i]!;
