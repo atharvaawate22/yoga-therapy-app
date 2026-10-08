@@ -1,0 +1,20 @@
+import path from "node:path";
+import type { NextConfig } from "next";
+
+// The repo root: parent of web/ and packages/. Turbopack refuses to resolve
+// files outside its root, and pose-core is linked in from ../packages.
+const repoRoot = path.join(__dirname, "..");
+
+const nextConfig: NextConfig = {
+  // Fully static: the app is offline-first and inference runs in the
+  // browser, so there is nothing for a server to do. `next build` -> out/.
+  output: "export",
+  // The image optimizer needs a server; static assets are optimized at
+  // build time instead (M5).
+  images: { unoptimized: true },
+  // pose-core ships TypeScript source, not a build.
+  transpilePackages: ["pose-core"],
+  turbopack: { root: repoRoot },
+};
+
+export default nextConfig;

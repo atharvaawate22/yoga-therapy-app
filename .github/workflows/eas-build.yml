@@ -4,15 +4,19 @@ on:
   push:
     branches: [main]
     # Each EAS build spends free-tier quota, so skip pushes that can't change
-    # the APK: backend code (deployed by its own workflow), docs, and CI files
+    # the APK: backend code (deployed by its own workflow), the web app and
+    # its shared packages (not part of the Expo bundle), docs, and CI files
     # other than this one.
     paths-ignore:
       - "backend/**"
+      - "web/**"
+      - "packages/**" # remove once the RN app imports pose-core (plan M8)
       - "**/*.md"
       - ".github/workflows/deploy-lambda-backend.yml"
       - ".github/workflows/publish-latest-apk.yml"
       - ".github/workflows/backend-tests.yml"
       - ".github/workflows/app-tests.yml"
+      - ".github/workflows/web-ci.yml"
       - "**/__tests__/**"
       - "jest.setup.js"
   workflow_dispatch: {}
