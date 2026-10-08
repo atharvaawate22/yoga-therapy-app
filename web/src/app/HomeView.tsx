@@ -119,7 +119,7 @@ export function HomeView() {
             Point a camera at yourself and hear how to fix your alignment.
           </span>
           <span className="mt-1 block text-xs font-semibold uppercase tracking-wide text-white/75">
-            Android app now · web version coming
+            Runs on this device · nothing uploaded
           </span>
         </span>
         <ChevronRight aria-hidden="true" className="size-6" />

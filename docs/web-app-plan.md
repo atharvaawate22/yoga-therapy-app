@@ -532,6 +532,31 @@ Effort is in focused working days for one person. Each milestone ends with somet
   - Verified in the browser: the Warrior II sample is recognised at 98% and matches its target; Tree Pose at 99%.
 - **Tests:** backend 243, pose-core 98 (including 6 parity suites), web 73.
 
+**M4 (live corrector): done on branch `web/m4-live`, stacked on M3.**
+
+- **`/corrector` Live tab.**
+  - Sources: camera (permission explained up front; blocked, missing, busy and insecure-context errors explained, plus separate video errors), a video file, or a no-camera demo (a slideshow of the credited sample photos; `?demo=1` starts it).
+  - Skeleton overlay on the live video, mirrored for the front camera while the model sees unmirrored frames.
+  - Pose name, confidence and the top cue on screen; the full corrections and target-pose match below.
+  - Flip camera, voice toggle, screen kept on.
+  - The Photo tab keeps M3's photo check.
+- **Model choice** (`modelChoice.ts`), as in decision #1: Thunder on desktop (WebGPU if LiteRT can use it), Lightning on phones (WASM). `?model=` / `?accel=` override it for the phone benchmark; `?debug=1` shows FPS, inference time, the body gate and the raw top guess.
+- **`TimeWindowVote` (pose-core).**
+  - The server's majority rule over 1.2 s and 60% instead of 5 frames, since 5 frames would be half a second at 10+ fps.
+  - It never keeps fewer than 5 frames, so slow devices get exactly the server's 3-of-5 behaviour. A test checks this equivalence.
+  - Found in the browser: without that floor, a 1 fps device never reported a pose.
+- **`SpeechCoach`:** speaks a cue after it has held 2 s, at most every 4 s, never a back-to-back repeat, prefixed with the pose name as in the APK.
+- **`SessionTracker`:** the APK's save rules (at least 15 s with a recognised pose; camera only, so demo and video runs aren't logged as practice).
+- **Verified in the browser** (desktop, with timers substituted for the hidden pane's paused `requestAnimationFrame`):
+  - The demo runs at 16–19 fps on Thunder/WebGPU (37–56 ms per frame), and recognises Warrior II 98%, Tree 99%, Downward Dog 100% and Triangle 99%.
+  - The target match toggles correctly.
+  - Speech: one sentence per pose about 4 s apart.
+  - Stop shows a summary and doesn't save the demo.
+  - The camera-blocked path shows the right message.
+  - Not verifiable in the hidden pane: a real camera (blocked) and video playback (Chrome pauses background video). Both need a visible tab or a phone.
+- **Sample videos (decision #4)** still need recording. `public/demo/videos.json` is empty, and each clip added there becomes a "Sample" button (format in `web/README.md`).
+- **Tests:** pose-core 107, web 91.
+
 # Decisions (2026-10-08)
 
 Atharva accepted the recommendation on every open question:
