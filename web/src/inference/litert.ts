@@ -38,9 +38,37 @@ function loadRuntime(jspi: boolean) {
   return loaded.litert;
 }
 
+/** Download progress: bytes so far, and the total when the server reports it. */
+export type ProgressFn = (loaded: number, total: number | null) => void;
+
+/** Fetch a model file, reporting progress (LiteRT accepts the bytes directly). */
+async function fetchModel(url: string, onProgress?: ProgressFn): Promise<Uint8Array> {
+  const response = await fetch(url);
+  if (!response.ok || !response.body) throw new Error(`Couldn't download ${url} (${response.status})`);
+  const total = Number(response.headers.get("Content-Length")) || null;
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    onProgress?.(loaded, total);
+  }
+  const bytes = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
+
 export async function createLiteRtEstimator(
   variant: MoveNetVariant,
   accelerator: "wasm" | "webgpu",
+  onProgress?: ProgressFn,
 ): Promise<PoseEstimator> {
   const { supportsFeature, isWebGPUSupported } = await import("@litertjs/core");
   if (accelerator === "webgpu") {
@@ -50,9 +78,8 @@ export async function createLiteRtEstimator(
     }
   }
   const litert = await loadRuntime(accelerator === "webgpu");
-  const model: CompiledModel = await litert.loadAndCompile(`/models/movenet_${variant}.tflite`, {
-    accelerator,
-  });
+  const bytes = await fetchModel(`/models/movenet_${variant}.tflite`, onProgress);
+  const model: CompiledModel = await litert.loadAndCompile(bytes, { accelerator });
   const size = INPUT_SIZE[variant];
   const [input] = model.getInputDetails();
   if (input && (input.shape[1] !== size || input.dtype !== "float32")) {

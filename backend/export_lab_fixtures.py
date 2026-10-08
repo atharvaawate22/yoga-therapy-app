@@ -30,7 +30,7 @@ from PIL import Image
 
 from utils.model import NumpyClassifier, load_labels
 from utils.movenet import MoveNetRuntime
-from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATH, MOVENET_VARIANTS
+from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATHS, MOVENET_VARIANTS
 from utils.preprocessing import (
     decode_image,
     extract_keypoints_pixels,
@@ -111,10 +111,10 @@ def main() -> None:
     logger.info("Selected %d images under %s", len(selected), ", ".join(ALLOWED_LICENSES))
 
     labels = load_labels()
-    # The shipped classifier was trained on Thunder keypoints; Lightning
-    # outputs are classified with it too, which is what serving Lightning
-    # without retraining would do.
-    classifier = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATH)
+    # Each variant's keypoints go through that variant's own classifier head.
+    classifiers = {
+        name: NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATHS[name]) for name in MOVENET_VARIANTS
+    }
     runtimes = {name: MoveNetRuntime(path) for name, (path, _url) in MOVENET_VARIANTS.items()}
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -132,7 +132,7 @@ def main() -> None:
                 "width": width,
                 "height": height,
                 "expected": {
-                    variant: analyse(data, runtime, classifier, labels)
+                    variant: analyse(data, runtime, classifiers[variant], labels)
                     for variant, runtime in runtimes.items()
                 },
             }

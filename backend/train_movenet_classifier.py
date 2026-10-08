@@ -35,6 +35,7 @@ from utils.model import (
     DEFAULT_PATIENCE,
     DEFAULT_VALIDATION_SPLIT,
     balanced_class_weights,
+    load_labels,
     save_classifier,
     train_classifier,
 )
@@ -340,7 +341,7 @@ def main() -> int:
     print(f"  Samples : {features.stats.kept} "
           f"({features.stats.retention_rate:.1%} of {features.stats.total_images})")
     print(f"  Classes : {num_classes}")
-    print(f"  Model   : {CLASSIFIER_MODEL_PATH}")
+    print(f"  Model   : {CLASSIFIER_MODEL_PATH} ({MOVENET_VARIANT})")
     print(f"  Labels  : {LABELS_PATH}")
     return 0
 

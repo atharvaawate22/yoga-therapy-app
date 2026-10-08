@@ -13,7 +13,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 MODELS_DIR = BASE_DIR / "models"
-CLASSIFIER_MODEL_PATH = MODELS_DIR / "pose_classifier.keras"
 LABELS_PATH = MODELS_DIR / "pose_labels.json"
 
 # Keypoint model. The classifier is trained on one variant's keypoints, so
@@ -37,6 +36,16 @@ if MOVENET_VARIANT not in MOVENET_VARIANTS:
         f"MOVENET_VARIANT={MOVENET_VARIANT!r}; expected one of {sorted(MOVENET_VARIANTS)}"
     )
 MOVENET_MODEL_PATH, MOVENET_URL = MOVENET_VARIANTS[MOVENET_VARIANT]
+
+# One classifier head per keypoint model: a head trained on Thunder keypoints
+# misclassifies Lightning's (the web lab measured 29/32 agreement), so each
+# variant has its own file and training one can't overwrite the other. Both
+# share pose_labels.json. Thunder keeps the original filename.
+CLASSIFIER_MODEL_PATHS = {
+    "thunder": MODELS_DIR / "pose_classifier.keras",
+    "lightning": MODELS_DIR / "pose_classifier_lightning.keras",
+}
+CLASSIFIER_MODEL_PATH = CLASSIFIER_MODEL_PATHS[MOVENET_VARIANT]
 
 # Training images. `dataset/` is preferred; `yoga_poses/train` is the older
 # layout and is still read if present. Both are gitignored (see README).

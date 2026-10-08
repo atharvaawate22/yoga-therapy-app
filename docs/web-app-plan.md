@@ -505,6 +505,33 @@ Effort is in focused working days for one person. Each milestone ends with somet
   - LiteRT logs INFO lines to `console.error` (cosmetic).
 - **Still open (needs a real phone).** FPS on a mid-range Android and an iPhone, which also decides WebGPU vs WASM on mobile and whether Thunder is fast enough there. Run `/lab` → Benchmark on a Vercel preview URL; WebGPU needs HTTPS, so a LAN `http://` address only tests WASM.
 
+**M3 (pose-core + golden parity): done on branch `web/m3-pose-core`, stacked on M2.**
+
+- **Per-variant classifier heads.**
+  - `utils.paths.CLASSIFIER_MODEL_PATHS` maps Thunder to `pose_classifier.keras` (unchanged) and Lightning to the new `pose_classifier_lightning.keras`.
+  - Training writes only the selected variant's head, and refuses to change the shared label order.
+  - This also fixes a latent server bug: `MOVENET_VARIANT=lightning` used to pair Lightning keypoints with the Thunder classifier.
+  - Lightning head, trained from the cached features: Wikimedia accuracy 0.765 / macro F1 0.605, against Thunder's 0.800 / 0.652.
+  - In the lab, Lightning with its own head now matches the server's served result on 31/32 photos (it was 29/32 with the Thunder head), which passes the 95% gate. Decision #1 is viable; phone FPS decides it.
+- **The rest of the pose logic in pose-core:**
+  - `corrections.ts`: every pose's rules, legacy-label aliases, Warrior II distances
+  - `stability.ts`: the 5-frame vote, including Counter tie-breaking
+  - `analyze.ts`: `analyzeFrame`, in `/analyze-pose` order
+- **Golden parity fixtures** (`backend/export_parity_fixtures.py` → `packages/pose-core/fixtures/parity.json.gz`, 292 KB):
+  - 1,008 skeletons × 29 pose names × 3 levels, i.e. 87,696 correction outputs, including collapsed-torso cases
+  - 500 frames per variant through the full post-MoveNet pipeline (real photos, no-body frames, recognised poses, image and live cutoffs)
+  - 300 vote sequences
+- **Results:**
+  - TypeScript reproduces 100% of these outputs.
+  - Cases on a float32/float64 decision boundary are resampled (182 of about 1,200 skeletons, mostly from rounding of the distance metrics).
+  - Source hashes (line-ending-normalized) make both the pose-core and backend tests fail when the Python changes without regenerating.
+  - `web-ci` now runs on changes to `yoga_pose_engine.py`, `preprocessing.py`, `label_utils.py` and the models.
+- **Demo: photo check on `/corrector`.**
+  - Pick a photo or one of three credited samples, and get the skeleton overlay, pose, confidence, corrections and target-pose match.
+  - It runs on the device (LiteRT Thunder on WASM plus `analyzeFrame`), with a progress bar for the one-time 25 MB model download.
+  - Verified in the browser: the Warrior II sample is recognised at 98% and matches its target; Tree Pose at 99%.
+- **Tests:** backend 243, pose-core 98 (including 6 parity suites), web 73.
+
 # Decisions (2026-10-08)
 
 Atharva accepted the recommendation on every open question:

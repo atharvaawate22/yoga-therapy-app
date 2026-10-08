@@ -124,8 +124,18 @@ Per class, for the poses that were weakest at the start (F1):
 than Lightning (192px), especially for floor poses, and wins on all three
 measurements overall. It costs ~27 ms per frame vs ~7 ms (local CPU), small
 next to the network round trip. Select a variant with `MOVENET_VARIANT`
-(default `thunder`); the classifier must be trained on the same variant's
-keypoints, and each variant has its own feature cache.
+(default `thunder`). Each variant has its own classifier head and feature
+cache (`pose_classifier.keras` for Thunder, `pose_classifier_lightning.keras`
+for Lightning; both share `pose_labels.json`), and training writes only the
+selected variant's head:
+
+```bash
+MOVENET_VARIANT=lightning python train_movenet_classifier.py --augment-mirror
+```
+
+The Lightning head exists for the web app, where phones may need the faster
+model. With its own head (trained 2026-10-08) it scores 0.765 accuracy and
+0.605 macro F1 on the Wikimedia set, against Thunder's 0.800 / 0.652.
 
 Scores published here before the data cleanup were computed on the leaky test
 set and overstate generalization.
@@ -223,19 +233,31 @@ per-class figures as a precise estimate.
 
 ## Exports for the web app
 
-The web app runs MoveNet and the classifier in the browser (`web/`,
-`packages/pose-core`). Two scripts keep it in step with this backend:
+The web app runs MoveNet, the classifier and the correction rules in the
+browser (`web/`, `packages/pose-core`). Three scripts keep it in step with
+this backend:
 
 ```bash
-python export_web_artifacts.py   # classifier weights + thresholds -> packages/pose-core/models/
-python export_lab_fixtures.py    # parity photos + reference outputs -> web/public/lab/fixtures/
+python export_web_artifacts.py    # each variant's classifier + thresholds -> packages/pose-core/models/
+python export_lab_fixtures.py     # parity photos + reference outputs -> web/public/lab/fixtures/
+python export_parity_fixtures.py  # golden outputs of the pose logic -> packages/pose-core/fixtures/
 ```
 
-Rerun `export_web_artifacts.py` after retraining: `tests/test_web_exports.py`
-and pose-core's tests fail while the exported classifier is stale.
+- `export_parity_fixtures.py` runs this server's own functions on about
+  1,000 skeletons (every pose's correction rules at every level), 500 raw
+  MoveNet frames per variant (gate, classifier, cutoffs, corrections), and 300
+  label sequences for the stability vote. The TypeScript port must reproduce
+  every output.
+- Cases sitting on a float32/float64 decision boundary are resampled.
+- The file records hashes of the Python sources and models it was generated
+  from.
+
+**After changing the pose logic or retraining, rerun the exports.** Until you
+do, `tests/test_web_exports.py` and pose-core's tests fail.
 `export_lab_fixtures.py` needs the Wikimedia set (`fetch_wikimedia_testset.py`)
 and TensorFlow or LiteRT. It only redistributes CC0, public-domain and CC BY
-photos, credited in the fixtures' `ATTRIBUTION.md`.
+photos, credited in the fixtures' `ATTRIBUTION.md`. Order matters:
+`export_parity_fixtures.py` reads the lab manifest, so run it last.
 
 ## Tests
 

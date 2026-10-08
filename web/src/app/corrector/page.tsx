@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { CorrectorPlaceholder } from "./CorrectorPlaceholder";
+import { CorrectorView } from "./CorrectorView";
 
 export const metadata: Metadata = { title: "Pose corrector" };
 
 export default function CorrectorPage() {
   return (
     <Suspense>
-      <CorrectorPlaceholder />
+      <CorrectorView />
     </Suspense>
   );
 }
