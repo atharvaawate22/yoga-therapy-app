@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Copied in by scripts/copy-runtime-assets.mjs (vendor WASM glue code).
+    "public/litert/**",
   ]),
 ]);
 

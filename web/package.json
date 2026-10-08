@@ -1,9 +1,11 @@
 {
   "name": "yoga-therapy-web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-runtime-assets.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-runtime-assets.mjs",
     "build": "next build",
     "preview": "npx --yes serve@14.2.4 out",
     "lint": "eslint",
@@ -12,6 +14,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@litertjs/core": "2.5.3",
+    "@tensorflow/tfjs": "4.22.0",
+    "@tensorflow/tfjs-backend-webgpu": "4.22.0",
     "lucide-react": "1.47.0",
     "next": "16.3.8",
     "pose-core": "file:../packages/pose-core",

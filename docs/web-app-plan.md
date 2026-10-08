@@ -263,6 +263,8 @@ Why:
 
 **Decision gate (end of M2):** pick the candidate that (1) matches Python keypoints on the fixture set (mean |Δ| ≤ 0.01 normalised, top-1 label agreement ≥ 95%), then (2) has the better FPS on the test phone. If neither matches, fall back to B and retrain the head on v4 keypoints (needs the local dataset).
 
+> **Outcome (M2, 2026-10-08): LiteRT.js running the vendored Thunder `.tflite`.** A third candidate found during the spike beat both of the above: Google's LiteRT.js (`@litertjs/core`) runs the server's exact `.tflite` file in the browser on WebGPU or WASM, so no conversion is needed (A2 was dropped). Results are under Progress → M2.
+
 **Thunder vs Lightning:** Thunder is 25 MB and more accurate (CV macro F1 0.782 vs 0.710, [backend/README.md](../backend/README.md) "Results"). Lightning is 9.4 MB and roughly 3–4× faster. Likely outcome: default to Lightning on phones and Thunder on desktop/WebGPU. That needs **one classifier head per variant** (each ~60 KB). The local `feature_cache_lightning.npz` makes training a Lightning head cheap. This is an open question for you.
 
 **Pre-processing in the browser must mirror Python:** pad to a centred square with fill 114, then resize. `INTER_AREA` vs canvas/bilinear resampling is a known small skew; M2 measures it. If it matters, do an area-average resize in a WebGL/WASM step. Camera frames have no EXIF; uploaded images use `createImageBitmap(..., {imageOrientation:'from-image'})`. Feed **un-mirrored** pixels: mirror only the preview with CSS.
@@ -466,6 +468,42 @@ Effort is in focused working days for one person. Each milestone ends with somet
 - Tests: 63 Vitest tests (practice and Surya state machines, `.ics`, backup validation, storage shim, content contract vs `pose_labels.json`, routine resolution, dialog, profile form, set editor).
 - Checked in a browser at phone and desktop widths, light and dark. Fixed from that pass: views opening scrolled to the bottom; the set-editor error appearing off screen; destructive dialogs focusing the destructive button.
 - Deferred to M5 as planned: pose photos are still the original ~1 MB PNGs.
+
+**M2 (inference spike + decision gate): done on branch `web/m2-inference`, stacked on M1.**
+
+- **Fixtures.**
+  - `backend/export_lab_fixtures.py` re-encodes 32 freely licensed Wikimedia photos (CC0, public domain or CC BY only, credited in `web/public/lab/fixtures/ATTRIBUTION.md`).
+  - It records the server pipeline's outputs for both MoveNet variants at float32 precision.
+  - The server gets 25/32 right on Thunder, in line with the 80% the backend README reports for this set.
+- **Classifier in TypeScript, pulled forward from M3.**
+  - `backend/export_web_artifacts.py` writes the MLP weights and server thresholds to `packages/pose-core/models/classifier.thunder.json`.
+  - `pose-core` now has `normalizeKeypoints`, `hasBody` and `PoseClassifier`.
+  - On all 64 fixture cases, the TypeScript features (within 1e-5 relative), body gate, labels and probabilities match Python.
+  - Backend and pose-core tests both fail if the export goes stale after retraining.
+- **`/lab`** (noindex, linked from About): load a runtime and model, run parity over the fixtures, benchmark, and run live with a skeleton overlay from camera, video file or image.
+- **Results** (desktop Chrome in the hidden browser pane; parity is deterministic, timings are throttled ranges):
+
+| Runtime · model | Mean keypoint error | Same label | Same served result | Body gate | Inference (desktop) |
+|---|---|---|---|---|---|
+| **LiteRT · Thunder · WASM** | **0.00095** | 31/32 | **32/32** | 32/32 | 66–112 ms |
+| **LiteRT · Thunder · WebGPU** | **0.00095** | 31/32 | **32/32** | 32/32 | 39–43 ms |
+| LiteRT · Lightning · WASM | 0.00128 | 29/32 | 29/32 | 31/32 | 12–20 ms |
+| LiteRT · Lightning · WebGPU | 0.00128 | 29/32 | 29/32 | 31/32 | 24–36 ms |
+| TF.js v4 · Thunder · WebGPU | 0.0109 | 28/32 | 26/32 | 31/32 | 6–12 ms |
+| TF.js v4 · Lightning · WebGPU | 0.0149 | 25/32 | — | 29/32 | 8–13 ms |
+
+- **Reading the results.**
+  - *Served result* is what the user would see after the body gate and the 0.70 cutoff.
+  - The one Thunder label mismatch is a borderline photo (server 0.48 plow, browser 0.40 bridge, caused by one ambiguous wrist). Both fall below the cutoff, so both serve "no pose".
+  - TF.js is fastest but fails parity: its v4 weights differ from the v3 weights the classifier was trained on.
+  - Lightning's keypoints are close to the server's, but the Thunder-trained classifier sits near decision boundaries on them.
+- **Decision.**
+  - Use LiteRT.js with the server's Thunder `.tflite`: WebGPU (JSPI build) where available, otherwise WASM (plain build, which is faster on CPU than the JSPI one).
+  - Lightning is not used until it has its own classifier head (decision #1). Training it needs the local dataset, so it moves to M3, where the Lightning head gets its own parity check.
+- **Other findings.**
+  - Canvas "low" smoothing matched slightly better on these 2× downscales (0.00079 vs 0.00095). "high" is kept because camera frames are downscaled 5× or more, where bilinear aliases.
+  - LiteRT logs INFO lines to `console.error` (cosmetic).
+- **Still open (needs a real phone).** FPS on a mid-range Android and an iPhone, which also decides WebGPU vs WASM on mobile and whether Thunder is fast enough there. Run `/lab` → Benchmark on a Vercel preview URL; WebGPU needs HTTPS, so a LAN `http://` address only tests WASM.
 
 # Decisions (2026-10-08)
 

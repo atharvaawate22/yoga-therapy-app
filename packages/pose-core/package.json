@@ -7,7 +7,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./models/classifier.thunder.json": "./models/classifier.thunder.json"
   },
   "sideEffects": false,
   "scripts": {

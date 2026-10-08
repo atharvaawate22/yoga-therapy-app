@@ -221,6 +221,22 @@ accuracy lands at 0.793 / 0.801 / 0.819. Aggregate numbers are stable to about
 `childs_pose` n=30) swings much more than that. Do not read a single run's
 per-class figures as a precise estimate.
 
+## Exports for the web app
+
+The web app runs MoveNet and the classifier in the browser (`web/`,
+`packages/pose-core`). Two scripts keep it in step with this backend:
+
+```bash
+python export_web_artifacts.py   # classifier weights + thresholds -> packages/pose-core/models/
+python export_lab_fixtures.py    # parity photos + reference outputs -> web/public/lab/fixtures/
+```
+
+Rerun `export_web_artifacts.py` after retraining: `tests/test_web_exports.py`
+and pose-core's tests fail while the exported classifier is stale.
+`export_lab_fixtures.py` needs the Wikimedia set (`fetch_wikimedia_testset.py`)
+and TensorFlow or LiteRT. It only redistributes CC0, public-domain and CC BY
+photos, credited in the fixtures' `ATTRIBUTION.md`.
+
 ## Tests
 
 The suite stubs both model runtimes through FastAPI's dependency overrides, so
