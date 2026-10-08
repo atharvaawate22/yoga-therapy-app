@@ -5,8 +5,10 @@ Router), TypeScript, Tailwind, built as a fully static export. Pose logic lives
 in [`../packages/pose-core`](../packages/pose-core) and is shared with the
 Python backend's contract through parity tests.
 
-Status and roadmap: [`docs/web-app-plan.md`](../docs/web-app-plan.md). This
-folder is milestone M0 (scaffold): a landing page, CI and deployment.
+Status and roadmap: [`docs/web-app-plan.md`](../docs/web-app-plan.md).
+Milestone M1 is in: everything in the Android app except the camera pose
+corrector (routines, guided practice, Surya Namaskar, custom sets, favorites,
+progress, settings), stored in the browser with JSON backup and restore.
 
 ## Develop
 
@@ -15,6 +17,9 @@ cd web
 npm install          # also links ../packages/pose-core
 npm run dev          # http://localhost:3000
 ```
+
+CI installs with npm 10 (Node 22). npm 11 on Windows can write a lockfile that
+npm 10 rejects, so add dependencies with `npx npm@10 install <pkg>`.
 
 | Script | What it does |
 |---|---|
@@ -28,12 +33,33 @@ CI: [`.github/workflows/web-ci.yml`](../.github/workflows/web-ci.yml) runs
 all of the above for `web/` and `packages/` on every PR and on pushes to
 `main`. Changes here don't trigger the Android APK build.
 
-## Layout notes
+## How it's put together
 
+- **Shared with the APK, not copied.** Poses, conditions, tips and the Surya
+  Namaskar sequence come straight from the RN app's `src/data` (the `@app-data`
+  alias). So do its storage helpers: `userStorage.js` and `sessionStorage.js`
+  run unchanged because `next.config.ts` aliases AsyncStorage to a localStorage
+  shim (`src/lib/storage/asyncStorageShim.ts`). Streaks and stats are the same
+  code, under the same Jest tests, as on Android. `src/content` and
+  `src/lib/storage` give that JS a typed boundary.
+- **Timing logic is pure.** Guided practice and Surya Namaskar are reducers in
+  `src/lib/practice/` with unit tests. The practice page applies wall-clock
+  seconds, not timer callbacks, because browsers throttle background timers.
+- **Browser equivalents for native features:** Web Speech API (voice cues),
+  Screen Wake Lock (screen stays on), a native `<dialog>` (the RN app's
+  `Alert.alert` does nothing on the web), and a calendar `.ics` file instead of
+  scheduled notifications, which browsers can't do while the page is closed.
+- **Static export.** Every condition and pose page is prerendered; anything
+  read from storage renders after hydration. Routines are addressed by URL
+  (`/practice?condition=back-pain`, `?pose=tree_pose`, `?set=<id>`).
 - `pose-core` is a `file:` dependency that ships TypeScript source, so
   `next.config.ts` lists it in `transpilePackages` and points `turbopack.root`
   at the repo root (Turbopack won't resolve files outside its root).
-- `output: "export"`: there is no server. Inference will run in the browser.
+
+Known local quirk: on Windows, Next 16.3's static export writes nested
+prefetch files to the wrong path, so a local `npm run preview` logs 404s for
+`__next.*.txt` prefetches. Navigation still works, and Linux builds (CI,
+Vercel) are unaffected.
 
 ## Deploy (Vercel)
 
