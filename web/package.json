@@ -1,6 +1,6 @@
 {
   "name": "yoga-therapy-web",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "predev": "node scripts/copy-runtime-assets.mjs",
@@ -13,7 +13,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lighthouse": "node scripts/lighthouse.mjs"
+    "lighthouse": "node scripts/lighthouse.mjs",
+    "demo:gif": "node scripts/record-demo.mjs"
   },
   "dependencies": {
     "@litertjs/core": "2.5.3",

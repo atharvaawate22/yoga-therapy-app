@@ -1,4 +1,4 @@
-"""MoveNet SinglePose Lightning (TFLite) wrapper.
+"""MoveNet SinglePose (TFLite) wrapper, Thunder by default (`MOVENET_VARIANT`).
 
 The server, the trainer and the evaluator all run keypoint extraction through
 this one class, so resize interpolation and input dtype handling cannot drift

@@ -1,249 +1,290 @@
-# Yoga Therapy App
+# Yoga Therapy
 
-A React Native mobile application built with Expo that helps users find recommended yoga poses for various physical and mental health problems. It includes an AI-powered live pose corrector backed by a Python (FastAPI + MoveNet) service on AWS Lambda.
+Yoga routines for 11 health conditions, with an AI pose corrector that watches
+you through the camera and speaks corrections. It ships as an **installable web
+app that runs the pose model on your device** and as an **Android app** backed
+by a serverless API.
 
-For a deep dive into the architecture, algorithms, and data flow, see [PROJECT_WORKFLOW.md](PROJECT_WORKFLOW.md).
-
-## 📥 Download & Install (APK)
-
-This app is **not on the Play Store** — it installs directly as an Android APK.
-Checking this out on your phone? Tap the button below. On a laptop? Scan the
-QR code with your phone's camera.
+[![Web CI](https://github.com/atharvaawate22/yoga-therapy-app/actions/workflows/web-ci.yml/badge.svg)](https://github.com/atharvaawate22/yoga-therapy-app/actions/workflows/web-ci.yml)
+[![Backend Tests](https://github.com/atharvaawate22/yoga-therapy-app/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/atharvaawate22/yoga-therapy-app/actions/workflows/backend-tests.yml)
+[![App Tests](https://github.com/atharvaawate22/yoga-therapy-app/actions/workflows/app-tests.yml/badge.svg)](https://github.com/atharvaawate22/yoga-therapy-app/actions/workflows/app-tests.yml)
 
 <p>
+  <a href="https://yoga.atharvaawate.me">
+    <img src="https://img.shields.io/badge/▶%20Live%20demo-yoga.atharvaawate.me-2E7D32?style=for-the-badge" alt="Live demo" />
+  </a>
   <a href="https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk">
-    <img src="https://img.shields.io/badge/⬇%20Download%20APK-Android-2E7D32?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" />
+    <img src="https://img.shields.io/badge/⬇%20Download%20APK-Android-1B5E20?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" />
   </a>
 </p>
 
 <p>
-  <img src="assets/readme/download-qr.png" alt="Scan to download the APK" width="180" />
+  <img src="assets/readme/web-demo.gif" alt="The web app's pose corrector recognising Warrior II, Tree Pose, Downward-Facing Dog and Triangle Pose with a skeleton overlay and spoken cues" width="300" />
 </p>
 
-**[⬇ Direct download — yoga-therapy.apk](https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk)**
-— automatically rebuilt and republished on every push to `main`, so this
-always points to the current build (all versions on the
-[Releases page](https://github.com/atharvaawate22/yoga-therapy-app/releases)).
+<sub>Recorded from the real app (`web/scripts/record-demo.mjs`). Every label,
+confidence and cue is the model's output in the browser. The sample photos come
+from Wikimedia Commons, credited in
+[ATTRIBUTION.md](web/public/lab/fixtures/ATTRIBUTION.md).</sub>
 
-**Install & use:** see the **[USER_GUIDE.md](USER_GUIDE.md)** for install
-steps and a feature walkthrough.
+## Try it in 30 seconds
 
-> **Key point for APK users:** every feature (guided practice, timers, history,
-> streaks, custom sets, reminders…) works standalone with no server and no
-> internet. The camera-based **Live Pose Corrector** talks to a hosted AWS
-> backend over the internet (no laptop or local network needed) — it just
-> needs your phone to be online. Details in the [user guide](USER_GUIDE.md).
+- **No webcam needed:** [yoga.atharvaawate.me/corrector?demo=1](https://yoga.atharvaawate.me/corrector?demo=1) runs the live corrector on sample photos.
+- **With your camera:** open [/corrector](https://yoga.atharvaawate.me/corrector), tap *Start camera* and hold a pose. Frames are analysed on the device and never uploaded. Open the network tab to check.
+- **On your phone:** open the site and use *Settings → Install the app*. After that it works offline, corrector included.
+- **Android:** download the [APK](https://github.com/atharvaawate22/yoga-therapy-app/releases/latest/download/yoga-therapy.apk), or scan the code below from a laptop. It isn't on the Play Store; see the [user guide](USER_GUIDE.md) for install steps. It is rebuilt on every push to `main`, and all versions are on the [Releases page](https://github.com/atharvaawate22/yoga-therapy-app/releases).
+
+<p><img src="assets/readme/download-qr.png" alt="Scan to download the APK" width="140" /></p>
+
+## Two versions, one model
+
+| | v1 · Android app | v2 · Web app (PWA) |
+|---|---|---|
+| UI | React Native (Expo) | Next.js 16 + TypeScript, static export |
+| Pose model runs | On AWS Lambda (FastAPI, MoveNet on LiteRT, NumPy MLP) | In the browser (LiteRT.js on WebGPU or WASM, in a Web Worker) |
+| Analysis rate | about 1 frame/s, over the network | 10–20 frames/s on a desktop (phone numbers pending) |
+| Offline | Everything except the corrector | Everything, after the first visit |
+| Pose logic | Python (`backend/yoga_pose_engine.py`) | TypeScript (`packages/pose-core`), held to the Python by golden parity tests |
+
+Both versions run the same `.tflite` files and the same classifier weights,
+exported from one training pipeline.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph train["Training (Python, offline)"]
+    DS["Labelled pose photos<br/>+ Wikimedia test set"] --> TR["train_movenet_classifier.py<br/>MoveNet keypoints → MLP"]
+  end
+
+  subgraph art["Shared artifacts"]
+    TFL["movenet_thunder / lightning<br/>.tflite"]
+    KER["pose_classifier*.keras<br/>(one head per MoveNet variant)"]
+    JSON["classifier.*.json<br/>weights + thresholds"]
+    FIX["parity fixtures<br/>87,696 correction outputs, …"]
+  end
+
+  subgraph v1["v1 · Android APK: cloud inference"]
+    CAM1["Expo camera<br/>still about 1/s"] -->|HTTPS| GW["API Gateway<br/>(rate-limited)"]
+    GW --> LAMBDA["AWS Lambda: FastAPI<br/>MoveNet (LiteRT) → NumPy MLP<br/>→ 5-frame vote → rules"]
+    LAMBDA --> TTS1["expo-speech"]
+  end
+
+  subgraph v2["v2 · Web PWA: on-device inference"]
+    CAM2["getUserMedia frames"] --> WORKER["Web Worker<br/>LiteRT.js MoveNet<br/>(WebGPU or WASM)"]
+    WORKER --> CORE["pose-core (TypeScript)<br/>gate → MLP → time-window vote → rules"]
+    CORE --> TTS2["Web Speech"]
+    SW["Service worker<br/>precache + model cache"] -.-> WORKER
+  end
+
+  TR --> KER
+  KER -->|export_web_artifacts.py| JSON
+  KER -->|export_parity_fixtures.py| FIX
+  TFL --> LAMBDA
+  KER --> LAMBDA
+  TFL --> WORKER
+  JSON --> CORE
+  FIX -.->|"CI: TypeScript must match 100%"| CORE
+```
+
+## Measured results
+
+Every number here was measured; where a measurement is still missing, the table
+says so.
+
+**Classifier** (24 poses; details and per-class numbers in
+[backend/README.md](backend/README.md#results)):
+
+| Model | CV macro F1 | Leak-free test macro F1 | Independent Wikimedia photos (238): accuracy / macro F1 |
+|---|---|---|---|
+| MoveNet Thunder + MLP (desktop web, Android) | 0.782 | 0.828 | 0.800 / 0.652 |
+| MoveNet Lightning + its own MLP head (phones on web) | — | — | 0.765 / 0.605 |
+
+**Browser vs server parity:**
+
+| Check | Result |
+|---|---|
+| Pose logic in TypeScript vs Python (CI, every PR) | 100% of 87,696 correction outputs, 1,000 full-pipeline frames and 300 vote sequences |
+| MoveNet in the browser vs on the server (32 Wikimedia photos, `/lab`) | Thunder: mean keypoint error 0.00095, same result shown to the user on 32/32. Lightning: 31/32 |
+| TF.js MoveNet v4 (rejected) | Mean keypoint error 0.0109, same result on 26/32 |
+
+**Web performance:**
+
+| Measure | Result | Where |
+|---|---|---|
+| Thunder inference | 39–43 ms on WebGPU; 74 ms on CPU (p50) | Desktop Chrome (GPU); headless Chromium (CPU) |
+| Lightning inference | 13 ms on CPU (p50) | Headless Chromium, desktop |
+| Main-thread long tasks during a live session | 64–67 per ~6 s on the main thread → 0 in a Web Worker | Thunder on CPU, fake camera, 3 runs |
+| Phones (mid-range Android, iPhone) | Pending: run `/lab` → *Benchmark this device* | [device-testing.md](docs/device-testing.md) |
+| Lighthouse, 6 pages (mobile) | Performance 93–98, accessibility 100, best practices 96, SEO 100 | Local run; CI fails a page below 90 / 95 / 95 / 90 |
+| First-load JavaScript | about 200 KB gzipped per page | Static export |
+| Offline precache | 302 files, 5.7 MB (pose photos: 7.9 MB of PNG → 0.23 MB of WebP) | Service worker |
+| One-time model download | Lightning 9.4 MB or Thunder 25 MB, plus LiteRT WASM (8.9 MB) | Cached on first use |
+
+## Design decisions
+
+Each has a short record in [docs/adr](docs/adr/README.md):
+
+- **The pipeline runs in the browser** ([0001](docs/adr/0001-in-browser-inference.md)). The result is privacy, offline use, and 10–20 frames/s on a desktop instead of about 1. A public demo also can't eat the API rate limit that APK users share.
+- **A separate Next.js app, not Expo web** ([0002](docs/adr/0002-nextjs-not-expo-web.md)). The corrector needed a rewrite anyway, and the APK had to stay untouched. Content and storage code are still shared: the web app imports the RN app's `src/data` directly.
+- **LiteRT.js runs the server's exact `.tflite`** ([0003](docs/adr/0003-litert-same-tflite.md)). It won a measured spike against TF.js and ONNX conversion. The faster TF.js failed parity because of different weights.
+- **Pad, never crop** ([0004](docs/adr/0004-pad-never-crop.md)). This matches the server's pre-processing, after a crop/pad train/serve mismatch was found and fixed in the backend.
+- **The MLP and the rules are plain TypeScript, held to Python by golden fixtures** ([0005](docs/adr/0005-pose-core-golden-parity.md)). The fixtures carry source hashes, so retraining or editing a rule without regenerating them fails CI.
+- **A time-window vote on the web** ([0006](docs/adr/0006-time-window-vote.md)). It uses the server's majority rule over 1.2 s instead of 5 frames, so labels don't flicker at 15 frames/s.
+- **Calendar reminders, not push** ([0007](docs/adr/0007-calendar-reminders.md)). Web Push would need a server and only works for installed apps on iOS.
+- **A hand-written service worker** ([0008](docs/adr/0008-hand-written-service-worker.md)), **inference in a Web Worker** ([0009](docs/adr/0009-inference-in-a-worker.md)), and **the model chosen per device** ([0010](docs/adr/0010-model-per-device.md)).
+
+## Web vs Android
+
+| Feature | Android | Web | Why |
+|---|---|---|---|
+| Conditions, poses, guided practice, Surya Namaskar | ✅ | ✅ | Same content, imported from `src/data` |
+| Voice cues | ✅ | ✅ | Web Speech API; voice quality depends on the OS |
+| Screen stays on during practice | ✅ | ✅ on Chrome/Android | Screen Wake Lock API |
+| History, streaks, custom sets, favorites | ✅ | ✅ per browser | Browser storage can be cleared, so Settings has JSON export and import |
+| Daily reminder | ✅ notification | ⚠️ calendar (`.ics`) | Browsers can't schedule a notification while the page is closed |
+| Live pose corrector | ✅ needs internet | ✅ on-device, works offline | The model runs in the browser |
+| Photo check | ✅ | ✅ | Runs on the device |
+| Without a server | All but the corrector | Everything | Static site, no backend |
 
 ## Features
 
-- 🩺 Browse 11 health conditions with recommended, experience-filtered poses
+- 🩺 11 health conditions with recommended poses, filtered by experience level
 - 🧘 Timed guided practice with voice cues, prep countdowns and pause/skip
-- ☀️ Surya Namaskar mode — 12-step guided rounds with breathing cues
-- 📊 Practice history: day streaks, weekly minutes, 7-day activity chart
-- 📋 Custom routines — build, edit, reorder and play your own pose sets
-- ❤️ Favorite poses, surfaced on the Home screen
-- 🔔 Daily practice reminder notifications (local, no account needed)
-- 📷 AI Live Pose Corrector with spoken corrections (backend-powered)
-- ⚙️ Bottom-tab navigation (Home / Progress / Settings) with a wellness-themed UI
+- ☀️ Surya Namaskar: 12-step guided rounds with breathing cues
+- 📷 Live pose corrector: recognises 24 poses, draws the skeleton and speaks corrections; target-pose matching; photo check
+- 📊 Practice history: day streaks, weekly minutes and a 7-day chart
+- 📋 Custom routines you can build, reorder and play; favorite poses
+- 📲 The web app installs to the home screen and works offline. The Android APK rebuilds on every push
 
-## Engineering Highlights
-
-**Pose recognition pipeline.** Camera frame → MoveNet Thunder keypoints → body-visibility
-check → normalized keypoint vector → MLP classifier → confidence cutoff →
-multi-frame vote → rule-based corrections that are spoken aloud. The correction
-rules measure in torso lengths, so feedback doesn't depend on photo resolution
-or camera distance. A rule only runs on joints the model detected confidently.
+## Engineering highlights
 
 **Data quality work on the classifier** ([details](backend/README.md#data-cleaning)):
-- Found a *train/serve mismatch*: the model was trained on center-cropped
-  images while the server padded them, and training skipped the server's EXIF
-  rotation. Both now go through one shared preprocessing function.
-- Found 200 training images labelled **both** cobra and upward dog (the same
-  file filed in two folders), and **35% of the test set** (1,143 of 3,425
-  images) duplicated from training. Extraction now drops label conflicts and
-  duplicates, and evaluation excludes train copies.
-- Added grouped k-fold cross-validation so every class gets an honest score,
-  chose training options by multi-seed ablation (mirror augmentation helped;
-  joint-angle features and class weighting didn't), and merged or dropped
-  classes the data couldn't support.
-- Built an **independent test set** of 238 freely licensed Wikimedia Commons
-  photos: hand-reviewed, with attribution, and checked against training data
-  with a perceptual hash (it caught 12 resized copies an exact-match check
-  would miss).
-- Swapped MoveNet Lightning for the more accurate **Thunder** keypoint model
-  after it won on all three measurements.
-- Result: macro F1 **0.746 → 0.828** on the leak-free test set; butterfly
-  **0.354 → 0.779**, seated twist **0.596 → 0.752**; **80% accuracy** on the
-  independent photos. Remaining weak classes are documented with their data
-  counts, and there's a [recording guide](docs/RECORDING_GUIDE.md) plus a
-  script that turns friends' phone videos into training data, holding out
-  whole people as the test set.
+- Found a *train/serve mismatch*: the model was trained on centre-cropped images while the server padded them. Training also skipped the server's EXIF rotation. Both now go through one shared preprocessing function.
+- Found 200 training images labelled **both** cobra and upward dog (the same file in two folders). Also found that **35% of the test set** (1,143 of 3,425 images) duplicated training images. Extraction now drops label conflicts and duplicates, and evaluation excludes the copies.
+- Added grouped k-fold cross-validation, chose training options by multi-seed ablation, and merged or dropped classes the data couldn't support.
+- Built an **independent test set** of 238 freely licensed Wikimedia Commons photos, hand-reviewed and checked against training data with a perceptual hash. The hash caught 12 resized copies that an exact match would miss.
+- Result: macro F1 **0.746 → 0.828** on the leak-free test set and **80% accuracy** on the independent photos.
 
-**Serverless serving.** The API runs as a container on AWS Lambda behind API
-Gateway, with no TensorFlow at runtime: MoveNet runs on LiteRT, and the
-classifier runs in NumPy straight from the Keras file (verified equal to Keras
-within 3×10⁻⁷). Models load in under a second, down from timing out the
-30 s gateway.
-The app pre-warms the server when the corrector opens.
+**Serverless serving (v1).**
+- The API runs as a container on AWS Lambda behind a rate-limited API Gateway, with no TensorFlow at runtime: MoveNet runs on LiteRT, and the classifier runs in NumPy straight from the Keras file (equal to Keras within 3×10⁻⁷).
+- Models load in under a second, down from timing out the 30 s gateway.
 
-**Delivery.** 227 backend tests and 33 app tests (including an app↔model
-contract test) run in CI. Each backend deploy builds the image and smoke-tests
-the real models inside it before pushing. The public API is rate-limited.
-Every app change builds an APK with EAS and publishes it to the download link
-above.
+**On-device inference (v2).**
+- The same model runs in the browser through LiteRT.js, in a Web Worker, with automatic fallbacks: WebGPU → CPU, and worker → main thread.
+- If Thunder runs slower than 150 ms per frame on a device, the live session switches to Lightning by itself.
+- The pose logic is a framework-free TypeScript package checked against Python output on every PR.
 
-## Tech Stack
+## Testing and CI
 
-**Mobile app**
-- React Native with Expo
-- React Navigation (Native Stack)
-- Expo Camera, Image Picker, Speech
-- Functional Components with React Hooks
+| Suite | Tests | Runs |
+|---|---|---|
+| Backend (pytest, no TensorFlow needed) | 243 | `backend-tests.yml` on backend changes |
+| App (Jest, including an app↔model contract test) | 33 | `app-tests.yml` |
+| `pose-core` (Vitest, including the parity suites) | 107 | `web-ci.yml` |
+| Web unit (Vitest + Testing Library) | 121 | `web-ci.yml` |
+| Web end-to-end (Playwright, Chromium) | 5 | `web-ci.yml`: offline app, offline corrector, and the live camera path through Chromium's fake camera playing a Warrior II clip |
+| Lighthouse budgets | 6 pages | `web-ci.yml` |
 
-**Pose-analysis backend**
-- FastAPI + Uvicorn, hosted on AWS Lambda (container image) behind API Gateway
-- MoveNet SinglePose Lightning keypoints, run on LiteRT (the standalone TFLite runtime)
-- A small MLP pose classifier, trained with TensorFlow/Keras and served with plain NumPy
-- OpenCV, Pillow, NumPy
+**Deployments:**
+- Each backend deploy builds the image and smoke-tests the real models in it before it goes live.
+- Pushes to `main` that touch the app build an APK with EAS and publish it to the download link.
+- The web app is a static export hosted on Vercel.
+- Web-only changes don't spend EAS build quota.
 
-## Project Structure
+## Tech stack
 
-The React Native app lives at the repository root; the Python pose-analysis
-service is self-contained under `backend/`.
+**Web app (`web/`, `packages/pose-core`):**
+- Next.js 16 (App Router, static export, Turbopack), TypeScript, Tailwind CSS 4
+- LiteRT.js (WebGPU/WASM), Web Workers, a service worker, Web Speech, Screen Wake Lock
+- Vitest, Testing Library, Playwright, Lighthouse
+
+**Android app:**
+- React Native with Expo SDK 54, React Navigation
+- Expo Camera, Image Picker, Speech, Notifications
+
+**Pose-analysis backend (`backend/`):**
+- FastAPI on AWS Lambda (container image) behind API Gateway
+- MoveNet SinglePose Thunder (Lightning optional), run on LiteRT
+- A small MLP classifier, trained with TensorFlow/Keras and served with plain NumPy
+- OpenCV, Pillow, NumPy, pytest
+
+## Project structure
 
 ```
-├── App.js                          # App entry point
-├── app.config.js                   # Expo configuration (single source)
-├── eas.json                        # EAS build profiles (APK output)
-├── package.json                    # JS dependencies
-├── assets/poses/                   # Local pose reference images (see assets/README.md)
-├── src/
-│   ├── components/                 # PoseCard, PoseImage, ProblemCard, RoundSelector,
-│   │                               # ExperienceBadge, WeeklyStreakStrip
-│   ├── screens/                    # Home, Pose, PoseDetail, PoseCorrector, HealthScan,
-│   │                               # SuryaNamaskar, CustomSet, ProfileSetup,
-│   │                               # PracticeSession, History, Settings
-│   ├── data/                       # yogaData, poseImages, suryaNamaskarData, proTips,
-│   │                               # userStorage, sessionStorage
-│   ├── config/poseApi.js           # Backend API base URL and endpoints
-│   ├── navigation/                 # Bottom tabs + native stack
-│   ├── theme/                      # Centralized design system
-│   └── utils/                      # reminders, uploadImage
-│
-└── backend/                        # Python pose-analysis service (independent of the app)
-    ├── yoga_pose_engine.py         # FastAPI server (pose detection + corrections)
-    ├── train_movenet_classifier.py # Training script for the pose classifier
-    ├── eval_pose_metrics.py        # Evaluation metrics for the classifier
-    ├── requirements.txt            # Training/eval dependencies (full TensorFlow)
-    ├── requirements-space.txt      # Serving dependencies (no TensorFlow)
-    ├── Dockerfile.lambda           # AWS Lambda image (deployed by CI)
-    └── models/                     # MoveNet TFLite model, trained classifier, labels
+├── App.js, src/                 # React Native app (Expo)
+│   └── data/                    # Poses, conditions, tips, storage (also used by web/)
+├── web/                         # Next.js PWA (see web/README.md)
+│   ├── src/app/                 # Pages: conditions, practice, corrector, lab, …
+│   ├── src/inference/           # LiteRT.js MoveNet, Web Worker, skeleton drawing
+│   ├── sw/, scripts/            # Service worker, build and measurement scripts
+│   └── e2e/                     # Playwright tests
+├── packages/pose-core/          # Pure TypeScript pose logic + golden parity fixtures
+├── backend/                     # FastAPI service, training, evaluation, web exports
+│   └── models/                  # MoveNet .tflite files, classifier heads, labels
+└── docs/                        # Web plan and audit, ADRs, device testing, recording guide
 ```
 
-> **Note:** The training image datasets (`backend/yoga_poses/`, `backend/dataset/`)
-> are not included in this repository due to their size. The trained models in
-> `backend/models/` are included, so the app and backend work without the raw
-> dataset. To retrain, place class-labeled image folders under
-> `backend/yoga_poses/train` and `backend/yoga_poses/test` and run
-> `python train_movenet_classifier.py` from inside `backend/`.
+The training datasets aren't in the repo because of their size. The trained
+models in `backend/models/` are, so the app, the backend and the web app all
+work without them. Retraining is described in
+[backend/README.md](backend/README.md).
 
-## Getting Started
+## Getting started
 
-### Prerequisites
-
-- Node.js 20 or later (Expo SDK 54)
-- npm
-- Expo CLI via `npx expo` (no global install needed)
-
-### Installation
-
-1. Clone the repository and navigate into it:
-   ```bash
-   git clone https://github.com/atharvaawate22/yoga-therapy-app.git
-   cd yoga-therapy-app
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the Expo development server:
-   ```bash
-   npx expo start
-   ```
-
-4. Run on your device:
-   - Scan the QR code with Expo Go app (Android/iOS)
-   - Press `a` for Android emulator
-   - Press `i` for iOS simulator
-   - Press `w` for web browser
-
-### Building a Real Installable App (no Expo Go needed)
-
-To get a standalone APK a recruiter/tester can install directly on an
-Android phone, use [EAS Build](https://docs.expo.dev/build/introduction/)
-(free tier, runs in Expo's cloud):
+**Web app** (Node 22):
 
 ```bash
-npm install -g eas-cli
-eas login              # free Expo account
+cd web
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000. Scripts, structure and deployment are in
+[web/README.md](web/README.md).
+
+**Android app** (Node 20+):
+
+```bash
+npm install
+npx expo start
+```
+
+Scan the QR code with Expo Go, or press `a` for an emulator. For a standalone APK:
+
+```bash
 eas build --platform android --profile preview
 ```
 
-This uses the `preview` profile in `eas.json`, which builds a downloadable
-`.apk` file (not an `.aab`, so no Play Store needed) — EAS prints a link to
-the finished APK when the build completes (a few minutes).
+`.github/workflows/eas-build.yml` does this on every push to `main` that can
+change the app. It needs an `EXPO_TOKEN` repository secret. The build is
+published to the rolling `latest-preview` release that the download button
+points to. If the corrector can't reach the backend, the APK falls back to a
+result clearly labelled **DEMO**, which is never saved. The web app has no such
+fallback: every result it shows is real.
 
-#### Automated builds via GitHub Actions
-
-`.github/workflows/eas-build.yml` builds a fresh APK automatically on every
-push to `main` that can change the app (pushes touching only `backend/`, docs
-or other workflows are skipped to save EAS build quota), and can also be run
-on demand. One-time setup:
-
-1. Create a free account at [expo.dev](https://expo.dev) if you don't have one.
-2. Generate an access token: [expo.dev/accounts/\[account\]/settings/access-tokens](https://expo.dev/accounts/%5Baccount%5D/settings/access-tokens) → **Create token**.
-3. In this GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**, name it `EXPO_TOKEN`, and paste the token.
-
-After that, every push to `main` (or a manual run from the **Actions** tab →
-**EAS Build (Android APK)** → **Run workflow**) builds the APK in Expo's
-cloud, attaches it to the workflow run as a downloadable artifact
-(`yoga-therapy-app-preview-apk`), and publishes it to the rolling
-`latest-preview` GitHub Release that the download button above points to.
-
-If the Live Pose Corrector can't reach the backend, it falls back to a
-simulated result clearly labelled **DEMO**, so the feature still demonstrates
-end to end. Demo results are never saved to history and never count as a
-match for a target pose.
-
-### The Pose-Analysis Backend
-
-The installed APK uses the hosted backend (AWS Lambda behind API Gateway,
-URL in `src/config/poseApi.js`); nothing needs to run locally. Pushes that
-change `backend/` are tested by `.github/workflows/backend-tests.yml` and
-deployed by `.github/workflows/deploy-lambda-backend.yml`, which smoke-tests
-the built image with the real models before it goes live and applies API
-Gateway rate limits.
-
-**Running it locally** (for backend development). In an Expo dev build the
-app automatically uses your dev machine's LAN IP on port 8000, so the phone
-and computer must be on the same Wi-Fi. From `backend/`:
+**Backend** (only for backend development; the APK uses the hosted API). From
+`backend/`:
 
 ```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt   # full TensorFlow, also needed for training
+pip install -r requirements.txt
 uvicorn yoga_pose_engine:app --host 0.0.0.0 --port 8000
 ```
 
-Check it at `http://localhost:8000/health`. Tests need no TensorFlow:
-`pip install -r requirements-dev.txt && pytest`. See
-[backend/README.md](backend/README.md) for training and evaluation.
+Tests need no TensorFlow:
+
+```bash
+pip install -r requirements-dev.txt && pytest
+```
+
+In an Expo dev build, the app uses your machine's LAN IP on port 8000, so the
+phone and the computer must be on the same Wi-Fi. See
+[backend/README.md](backend/README.md) for training, evaluation and the web
+exports.
 
 ### Pose API
 
-`POST /analyze-pose`
+`POST /analyze-pose`:
 
 ```json
 {
@@ -262,71 +303,29 @@ Response:
   "pose": "warrior_pose",
   "confidence": 0.92,
   "corrections": ["Keep both arms level — extend equally left and right"],
-  "distances": {
-    "warrior_arm_span": 210.5,
-    "warrior_arm_height_offset": 12.3,
-    "warrior_wrist_height_diff": 8.1
-  },
+  "distances": { "warrior_arm_span": 210.5, "warrior_arm_height_offset": 12.3, "warrior_wrist_height_diff": 8.1 },
   "debug_image_base64": null,
   "probabilities": { "warrior_pose": 0.92, "...": 0.01 }
 }
 ```
 
-`pose` is `"nopose"` when no full body is visible or the classifier isn't
-confident. `distances` are in percent of the person's torso length. The
-skeleton overlay is only returned when `include_debug_image` is true.
+- `pose` is `"nopose"` when no full body is visible or the classifier isn't confident.
+- `distances` are in percent of the person's torso length.
+- `GET /health` is a cheap liveness probe. `GET /warmup` loads the models ahead of the first request.
 
-## Health Conditions Covered
+## Health conditions covered
 
-- Back Pain
-- Hip Alignment Issue
-- Scapula Winging
-- Knee Pain
-- Poor Posture
-- Headache
-- Stress
-- Anxiety
-- Insomnia
-- Digestion Issues
-- Weight Loss
-
-## Theme Colors
-
-Defined in `src/theme/theme.js`:
-
-| Color      | Hex Code  | Usage                    |
-|------------|-----------|--------------------------|
-| Primary    | #2E7D32   | Main actions, headers    |
-| Secondary  | #81C784   | Badges, accents          |
-| Background | #F5F9F4   | Screen backgrounds       |
-| Card       | #FFFFFF   | Card backgrounds         |
-| Text       | #1A2E1A   | Primary text             |
-
-## Adding New Health Problems
-
-1. Open `src/data/yogaData.js`.
-2. Add an entry built with the `p(...)` helper:
-
-```javascript
-"New Problem": [
-  p("tree_pose", "Tree Pose", "Vrksasana",
-    "Short description of why this pose helps.",
-    "30 sec each", "beginner",            // duration, difficulty
-    ["Benefit one", "Benefit two"],
-    ["Precaution one"],
-    ["Step one", "Step two", "Step three"]),
-],
-```
-
-The pose id must be in `ALLOWED_POSE_IDS` (same file) or it is filtered out.
-Photos come from `src/data/poseImages.js`; a pose without a bundled photo
-shows an icon placeholder. Add an icon for the new condition in
-`src/components/ProblemCard.js` and, optionally, tips in `src/data/proTips.js`.
+Back pain, hip alignment, scapula winging, knee pain, poor posture, headache,
+stress, anxiety, insomnia, digestion issues and weight loss. To add one, add an
+entry to `src/data/yogaData.js` with the `p(...)` helper. The pose id must be in
+`ALLOWED_POSE_IDS`. The web app picks it up at the next build.
 
 ## Disclaimer
 
-This app provides general yoga pose recommendations for educational purposes only. Always consult with a healthcare professional before starting any new exercise program, especially if you have existing health conditions.
+This app gives general yoga recommendations for educational purposes only.
+Consult a healthcare professional before starting any new exercise programme,
+especially if you have existing health conditions.
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT. See [LICENSE](LICENSE).
