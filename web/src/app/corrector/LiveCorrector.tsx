@@ -33,7 +33,13 @@ import {
   type CameraProblem,
   type Facing,
 } from "@/lib/live/camera";
-import { chooseLiveModel, detectDevice, type LiveModelChoice } from "@/lib/live/modelChoice";
+import {
+  chooseLiveModel,
+  detectDevice,
+  isPhoneDevice,
+  shouldDowngrade,
+  type LiveModelChoice,
+} from "@/lib/live/modelChoice";
 import { SessionTracker, type LiveSummary } from "@/lib/live/sessionTracker";
 import { SpeechCoach } from "@/lib/live/speechCoach";
 import { formatDuration, getProfile, getVoiceEnabled, savePracticeSession } from "@/lib/storage";
@@ -78,7 +84,8 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
 
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [source, setSource] = useState<SourceKind>("camera");
-  const [facing, setFacing] = useState<Facing>("user");
+  // null until the camera first starts: the default depends on the device.
+  const [facing, setFacing] = useState<Facing | null>(null);
   const [canFlip, setCanFlip] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [hud, setHud] = useState<Hud>({ fps: 0, inferenceMs: 0 });
@@ -115,11 +122,15 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
       .then((list: SampleVideo[]) => setSampleVideos(Array.isArray(list) ? list : []))
       .catch(() => setSampleVideos([]));
     getVoiceEnabled().then(setVoiceOn);
-    detectDevice().then((device) => {
-      setFacing(defaultFacing(device.isPhone));
-      setChoice(chooseLiveModel(device, new URLSearchParams(window.location.search)));
-    });
   }, []);
+
+  /** The model to run, decided on first start (WebGPU probing is costly). */
+  const resolveChoice = useCallback(async (): Promise<LiveModelChoice> => {
+    if (choice) return choice;
+    const decided = chooseLiveModel(await detectDevice(), new URLSearchParams(window.location.search));
+    setChoice(decided);
+    return decided;
+  }, [choice]);
 
   /** Stop the loop and media, and save the session if it counts. */
   const stop = useCallback(
@@ -159,8 +170,12 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
   useEffect(() => () => stop(false), [stop]);
 
   const runLoop = useCallback(
-    async (model: LiveModel, kind: SourceKind, loopId: number) => {
+    async (initialModel: LiveModel, initialChoice: LiveModelChoice, kind: SourceKind, loopId: number) => {
       const s = session.current;
+      let model = initialModel;
+      let current = initialChoice;
+      const inferenceTimes: number[] = [];
+      let downgrading = false;
       const video = videoRef.current!;
       const canvas = canvasRef.current!;
       const demo = kind === "demo" ? await Promise.all(DEMO_PHOTOS.map(loadPhoto)) : [];
@@ -183,6 +198,25 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
         }
 
         const { raw, timings } = await model.estimator.estimate(frame, width, height);
+        inferenceTimes.push(timings.inferenceMs);
+        // Too slow for Thunder: switch to Lightning in the background and
+        // keep analysing with Thunder until it's ready.
+        if (!downgrading && shouldDowngrade(current, inferenceTimes, new URLSearchParams(window.location.search))) {
+          downgrading = true;
+          const lighter: LiveModelChoice = {
+            ...current,
+            variant: "lightning",
+            reason: `${current.reason}; switched to Lightning (Thunder too slow here)`,
+          };
+          loadLiveModel(lighter)
+            .then((next) => {
+              if (s.loopId !== loopId) return;
+              model = next;
+              current = lighter;
+              setChoice(lighter);
+            })
+            .catch(() => undefined); // keep Thunder if Lightning can't load
+        }
         if (s.loopId !== loopId) break;
         const now = performance.now();
         const result = analyzeFrame(raw, {
@@ -207,9 +241,10 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
     [speak],
   );
 
-  const start = async (kind: SourceKind, video?: File | string, cameraFacing: Facing = facing) => {
-    if (!choice) return;
-    unlock(); // iOS: speech must begin from a tap
+  const start = async (kind: SourceKind, video?: File | string, requestedFacing?: Facing) => {
+    unlock(); // iOS: speech must begin from a tap, before any await
+    const cameraFacing = requestedFacing ?? facing ?? defaultFacing(isPhoneDevice());
+    if (kind === "camera") setFacing(cameraFacing);
     stop(false);
     const s = session.current;
     const loopId = ++s.loopId;
@@ -220,7 +255,8 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
     setAnalysis(null);
     try {
       setPhase({ kind: "loading", loaded: 0, total: null });
-      const model = await loadLiveModel(choice, (loaded, total) =>
+      const choiceNow = await resolveChoice();
+      const model = await loadLiveModel(choiceNow, (loaded, total) =>
         setPhase({ kind: "loading", loaded, total }),
       );
       const videoEl = videoRef.current!;
@@ -243,7 +279,7 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
       s.tracker.start(Date.now());
       setPhase({ kind: "running" });
       window.scrollTo({ top: 0 });
-      void runLoop(model, kind, loopId);
+      void runLoop(model, choiceNow, kind, loopId);
     } catch (error) {
       stop(false);
       setPhase({
@@ -257,14 +293,14 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
   // ?demo=1 (for links from the README/portfolio) starts the demo right away.
   // Speech needs a tap on iOS, so it may stay silent until the user taps.
   useEffect(() => {
-    if (choice && params.get("demo") === "1" && !autostarted.current) {
+    if (params.get("demo") === "1" && !autostarted.current) {
       autostarted.current = true;
       void start("demo");
     }
   });
 
   const flip = () => {
-    const next: Facing = facing === "user" ? "environment" : "user";
+    const next: Facing = (facing ?? "user") === "user" ? "environment" : "user";
     setFacing(next);
     if (running && source === "camera") void start("camera", undefined, next);
   };
@@ -294,7 +330,6 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
           <button
             type="button"
             onClick={() => void start("camera")}
-            disabled={!choice}
             className="flex items-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-on-primary hover:bg-primary-strong disabled:opacity-60"
           >
             <Camera aria-hidden="true" className="size-5" />
@@ -303,7 +338,6 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
           <button
             type="button"
             onClick={() => void start("demo")}
-            disabled={!choice}
             className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 font-semibold hover:bg-surface-alt disabled:opacity-60"
           >
             <Images aria-hidden="true" className="size-5" />
@@ -312,7 +346,6 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            disabled={!choice}
             className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 font-semibold hover:bg-surface-alt disabled:opacity-60"
           >
             <Film aria-hidden="true" className="size-5" />
@@ -323,8 +356,7 @@ export function LiveCorrector({ targetLabel }: { targetLabel: string | null }) {
               key={clip.file}
               type="button"
               onClick={() => void start("video", `/demo/${clip.file}`)}
-              disabled={!choice}
-              className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 font-semibold hover:bg-surface-alt disabled:opacity-60"
+                className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 font-semibold hover:bg-surface-alt disabled:opacity-60"
             >
               <Film aria-hidden="true" className="size-5" />
               Sample: {clip.label}

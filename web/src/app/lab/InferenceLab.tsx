@@ -85,6 +85,32 @@ declare global {
 
 const FIXTURES = "/lab/fixtures";
 
+interface DeviceRow {
+  runtime: RuntimeId;
+  variant: MoveNetVariant;
+  loadMs?: number;
+  /** Pre-processing + inference per frame, after warm-up. */
+  p50?: number;
+  p95?: number;
+  error?: string;
+}
+
+/** The device benchmark as a Markdown section for docs/device-testing.md. */
+function deviceMarkdown(rows: DeviceRow[]): string {
+  const lines = [
+    `### ${new Date().toISOString().slice(0, 10)} · ${navigator.userAgent}`,
+    "",
+    "| Model | Accelerator | p50 | p95 | Max FPS | Load |",
+    "|---|---|---|---|---|---|",
+    ...rows.map((r) =>
+      r.error
+        ? `| ${r.variant} | ${r.runtime.replace("litert-", "")} | unavailable: ${r.error} | | | |`
+        : `| ${r.variant} | ${r.runtime.replace("litert-", "")} | ${Math.round(r.p50!)} ms | ${Math.round(r.p95!)} ms | ${(1000 / r.p50!).toFixed(1)} | ${(r.loadMs! / 1000).toFixed(1)} s |`,
+    ),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
 async function loadBitmap(url: string): Promise<ImageBitmap> {
   const blob = await (await fetch(url)).blob();
   return createImageBitmap(blob, { imageOrientation: "from-image" });
@@ -100,6 +126,7 @@ export function InferenceLab() {
   const [busy, setBusy] = useState(false);
   const [run, setRun] = useState<LabRun | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [deviceReport, setDeviceReport] = useState<DeviceRow[] | null>(null);
 
   useEffect(() => {
     fetch(`${FIXTURES}/manifest.json`)
@@ -163,6 +190,53 @@ export function InferenceLab() {
     }
     publish({ ...run, parity: rows });
     setStatus(`Parity done on ${rows.length} images.`);
+    setBusy(false);
+  };
+
+  /**
+   * One tap on a phone: every LiteRT model x accelerator this browser can
+   * run, timed over 30 frames after warm-up, as a table to paste into
+   * docs/device-testing.md.
+   */
+  const benchmarkDevice = async () => {
+    if (!manifest) return;
+    setBusy(true);
+    estimator?.dispose();
+    setEstimator(null);
+    const bitmap = await loadBitmap(`${FIXTURES}/${manifest.images[0]!.file}`);
+    const rows: DeviceRow[] = [];
+    const combos: Array<[RuntimeId, MoveNetVariant]> = [
+      ["litert-wasm", "lightning"],
+      ["litert-wasm", "thunder"],
+      ["litert-webgpu", "lightning"],
+      ["litert-webgpu", "thunder"],
+    ];
+    for (const [runtimeId, variantId] of combos) {
+      setStatus(`Benchmarking ${variantId} on ${runtimeId}…`);
+      try {
+        const t0 = performance.now();
+        const e = await createEstimator(runtimeId, variantId);
+        const times: number[] = [];
+        for (let i = 0; i < 35; i++) {
+          const { timings } = await e.estimate(bitmap, bitmap.width, bitmap.height);
+          if (i === 0) rows.push({ runtime: runtimeId, variant: variantId, loadMs: performance.now() - t0 });
+          if (i >= 5) times.push(timings.inferenceMs + timings.preprocessMs);
+        }
+        e.dispose();
+        const row = rows.at(-1)!;
+        row.p50 = percentile(times, 50);
+        row.p95 = percentile(times, 95);
+      } catch (error) {
+        rows.push({
+          runtime: runtimeId,
+          variant: variantId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      setDeviceReport([...rows]);
+    }
+    bitmap.close();
+    setStatus("Device benchmark done. Copy the report below.");
     setBusy(false);
   };
 
@@ -272,11 +346,64 @@ export function InferenceLab() {
           >
             Benchmark
           </button>
+          <button
+            type="button"
+            onClick={benchmarkDevice}
+            disabled={busy || !manifest}
+            className="rounded-lg bg-primary px-4 py-2 font-semibold text-on-primary disabled:opacity-50"
+          >
+            Benchmark this device
+          </button>
         </div>
         <p role="status" className="text-sm text-muted">
           {status}
         </p>
       </section>
+
+      {deviceReport && (
+        <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+          <h2 className="font-semibold">This device</h2>
+          <table className="w-full text-left text-sm tabular-nums">
+            <thead>
+              <tr className="text-muted">
+                <th className="py-1">Model</th>
+                <th>Accelerator</th>
+                <th>p50</th>
+                <th>p95</th>
+                <th>Max FPS</th>
+                <th>Load</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deviceReport.map((row) => (
+                <tr key={`${row.runtime}-${row.variant}`} className="border-t border-border">
+                  <td className="py-1">{row.variant}</td>
+                  <td>{row.runtime.replace("litert-", "")}</td>
+                  {row.error ? (
+                    <td colSpan={4} className="text-muted">
+                      {row.error}
+                    </td>
+                  ) : (
+                    <>
+                      <td>{fmt(row.p50 ?? NaN, 0)} ms</td>
+                      <td>{fmt(row.p95 ?? NaN, 0)} ms</td>
+                      <td>{fmt(1000 / (row.p50 ?? NaN), 1)}</td>
+                      <td>{fmt((row.loadMs ?? NaN) / 1000, 1)} s</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard.writeText(deviceMarkdown(deviceReport))}
+            className="w-fit rounded-lg border border-border px-3 py-1.5 text-sm font-semibold"
+          >
+            Copy report (Markdown)
+          </button>
+        </section>
+      )}
 
       {run?.benchmark && (
         <section className="rounded-xl border border-border bg-surface p-4">

@@ -584,6 +584,27 @@ Effort is in focused working days for one person. Each milestone ends with somet
   - Screenshots for the richer Android install sheet (optional in the manifest).
   - An automated test of the update banner across two deploys.
 
+**M6 (performance + device testing): done on branch `web/m6-perf`, stacked on M5.** Real-phone results are pending (see `docs/device-testing.md`).
+
+- **Lighthouse (mobile, Lighthouse 13.5).**
+  - Baseline: performance 87–96, `/corrector` at 87 with TBT 220 ms, accessibility 98 on condition pages (heading order).
+  - CPU profiling found the corrector parsing both classifiers' JSON (about 130 KB) at load, plus a WebGPU adapter probe that sometimes stalled. Both are now deferred to Start.
+  - Now: performance 93–98, accessibility 100, best practices 96 (100 on Linux; the gap is the Windows-only Next prefetch bug), SEO 100 on all 6 pages.
+  - `scripts/lighthouse.mjs` enforces the §G budgets in CI. It uses Lighthouse directly, because `@lhci/cli` (June 2025) bundles an older Lighthouse.
+- **Web Worker inference** (`pose.worker.ts`, `workerEstimator.ts`).
+  - Frames go to the worker as transferred ImageBitmaps; it letterboxes them on an OffscreenCanvas and runs LiteRT.
+  - Measured with the e2e fake camera (`scripts/measure-live.mjs`, 3 runs each, Thunder on CPU): main thread 64–67 long tasks per ~6 s, 70% blocked, taps answered in 32–96 ms. Worker: 0 long tasks, taps answered in 16–24 ms, inference 67–77 ms (the same as the main thread's 68–70 ms).
+  - Fallbacks: if the worker can't start it falls back to the main thread; `?worker=0` forces the main thread.
+  - LiteRT's Emscripten loader looks for its `.wasm` next to the worker script, so the worker redirects those requests to `/litert/` (LiteRT has no `locateFile` option).
+- **Adaptive model.** `shouldDowngrade` switches a live session from Thunder to Lightning when the median inference after warm-up exceeds 150 ms. With a 4× throttled CPU it switched after 7 s. An explicit `?model=` is respected, and WebGPU failures fall back to CPU.
+- **Device testing.**
+  - `/lab` → "Benchmark this device" runs LiteRT Lightning and Thunder on CPU and WebGPU and copies a Markdown report.
+  - `docs/device-testing.md` has the 15-point checklist and results; desktop numbers are filled in (Lightning 13 ms, Thunder 74 ms on CPU).
+  - **Phone runs are still needed** to confirm decision #1 (Lightning on phones) and the phone accelerator.
+- **Fixes found along the way:**
+  - TypeScript was type-checking `out/`, where Turbopack copies the worker's `.ts` source.
+  - That `.ts` copy would also have been precached; it no longer is.
+
 # Decisions (2026-10-08)
 
 Atharva accepted the recommendation on every open question:

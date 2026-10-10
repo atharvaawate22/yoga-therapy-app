@@ -50,6 +50,7 @@ export function RoutineView({ badge, title, poses, practiceHref, tips, tipsTitle
         </p>
       )}
 
+      <h2 className="sr-only">Poses</h2>
       <ol className="grid gap-4 sm:grid-cols-2">
         {poses.map((pose, index) => (
           <li key={pose.id}>

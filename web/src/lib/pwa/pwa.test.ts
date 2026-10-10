@@ -30,6 +30,8 @@ describe("service worker manifest", () => {
     ["models/movenet_thunder.tflite", false], // cached on first use instead
     ["litert/litert_wasm_internal.wasm", false],
     ["sw.js", false],
+    ["_next/static/media/pose.worker.abc.ts", false], // worker source copy
+    ["_next/static/chunks/turbopack-worker-abc.js", true], // the compiled worker
   ])("%s precached: %s", (path, expected) => {
     expect(isPrecached(path, DEMO)).toBe(expected);
   });

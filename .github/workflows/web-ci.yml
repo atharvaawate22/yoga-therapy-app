@@ -101,6 +101,14 @@ jobs:
       - name: End-to-end tests
         run: npx playwright test
 
+      # Mobile Lighthouse on the main pages; fails below the plan's budgets
+      # (performance 90, accessibility 95, best practices 95, SEO 90).
+      - name: Lighthouse budgets
+        run: |
+          npx serve out -l 4180 --no-clipboard &
+          for i in $(seq 1 30); do curl -sf http://localhost:4180/ >/dev/null && break; sleep 1; done
+          npm run lighthouse
+
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v4
