@@ -6,17 +6,24 @@ on:
     paths:
       - "web/**"
       - "packages/**"
-      # pose-core's tests check the TypeScript port against the backend: the
-      # keypoint definitions, and that the exported classifier matches the
-      # served model. The web build also copies the .tflite models.
+      # pose-core's parity tests replay golden outputs of the backend's pose
+      # logic and fail if any of these changed without regenerating them
+      # (backend/export_parity_fixtures.py). The web build also copies the
+      # .tflite models.
+      - "backend/yoga_pose_engine.py"
       - "backend/utils/preprocessing.py"
+      - "backend/utils/label_utils.py"
+      - "backend/export_parity_fixtures.py"
       - "backend/models/**"
       - ".github/workflows/web-ci.yml"
   pull_request:
     paths:
       - "web/**"
       - "packages/**"
+      - "backend/yoga_pose_engine.py"
       - "backend/utils/preprocessing.py"
+      - "backend/utils/label_utils.py"
+      - "backend/export_parity_fixtures.py"
       - "backend/models/**"
       - ".github/workflows/web-ci.yml"
   workflow_dispatch: {}

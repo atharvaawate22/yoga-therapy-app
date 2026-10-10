@@ -11,6 +11,7 @@ import rawYogaData, { getAllPoses, posesForExperience } from "@app-data/yogaData
 import rawSuryaSteps from "@app-data/suryaNamaskarData";
 import rawProTips from "@app-data/proTips";
 import { getPoseIcon as rawGetPoseIcon } from "@app-data/poseImages";
+import { POSE_COMMON_NAMES, POSE_SANSKRIT_NAMES } from "@app-data/poseNames";
 
 export type Level = "beginner" | "intermediate" | "expert";
 export const LEVELS: readonly Level[] = ["beginner", "intermediate", "expert"];
@@ -120,4 +121,14 @@ export function tipsFor(name: string): string[] {
 /** RN icon hint for a pose without a photo: { family, name }. */
 export function poseIconHint(poseId: string): { family: string; name: string } {
   return rawGetPoseIcon(poseId) as { family: string; name: string };
+}
+
+/** Display name for a classifier label, e.g. "tree_pose" -> "Tree Pose". */
+export function poseDisplayName(label: string): string {
+  return (POSE_COMMON_NAMES as Record<string, string>)[label] ?? label.replace(/_/g, " ");
+}
+
+/** Sanskrit name for a classifier label, if known. */
+export function poseSanskritName(label: string): string | undefined {
+  return (POSE_SANSKRIT_NAMES as Record<string, string>)[label];
 }

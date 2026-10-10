@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from utils.model import NumpyClassifier
-from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATH
+from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATHS
 
 pytest.importorskip("h5py")
 pytest.importorskip("PIL")
@@ -16,12 +16,14 @@ pytest.importorskip("PIL")
 import export_lab_fixtures as fixtures  # noqa: E402
 import export_web_artifacts as artifacts  # noqa: E402
 
-COMMITTED_ARTIFACT = BASE_DIR.parent / "packages" / "pose-core" / "models" / "classifier.thunder.json"
+ARTIFACT_DIR = BASE_DIR.parent / "packages" / "pose-core" / "models"
+VARIANTS = sorted(CLASSIFIER_MODEL_PATHS)
 
 
-def test_artifact_reproduces_the_served_classifier() -> None:
-    artifact = artifacts.build_artifact()
-    served = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATH)
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_artifact_reproduces_the_classifier(variant: str) -> None:
+    artifact = artifacts.build_artifact(variant)
+    served = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATHS[variant])
     x = np.random.default_rng(1).normal(0, 1.5, size=(32, served.input_dim)).astype(np.float32)
 
     out = x
@@ -37,10 +39,11 @@ def test_artifact_reproduces_the_served_classifier() -> None:
     np.testing.assert_allclose(out, served.predict(x), rtol=1e-6, atol=1e-7)
 
 
-def test_committed_artifact_is_current() -> None:
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_committed_artifact_is_current(variant: str) -> None:
     # Fails after retraining until `python export_web_artifacts.py` is rerun.
-    committed = json.loads(COMMITTED_ARTIFACT.read_text(encoding="utf-8"))
-    assert committed == artifacts.build_artifact()
+    path = ARTIFACT_DIR / f"classifier.{variant}.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == artifacts.build_artifact(variant)
 
 
 def test_artifact_carries_the_server_thresholds() -> None:
@@ -80,3 +83,38 @@ def test_selection_caps_each_label_and_skips_share_alike() -> None:
 def test_float32_values_round_trip_exactly() -> None:
     values = np.random.default_rng(2).normal(size=100).astype(np.float32)
     assert np.array_equal(np.asarray(fixtures.f32(values), dtype=np.float32), values)
+
+
+# ── Golden parity fixtures (export_parity_fixtures.py) ─────────────────────
+
+import gzip  # noqa: E402
+
+import export_parity_fixtures as parity  # noqa: E402
+
+PARITY_FIXTURE = BASE_DIR.parent / "packages" / "pose-core" / "fixtures" / "parity.json.gz"
+
+
+def test_parity_fixtures_are_current() -> None:
+    # Fails when the pose logic or models change until
+    # `python export_parity_fixtures.py` is rerun (pose-core replays them).
+    committed = json.loads(gzip.decompress(PARITY_FIXTURE.read_bytes()))
+    assert committed["sources"] == {path: parity.source_hash(path) for path in parity.SOURCES}
+
+
+def test_parity_generation_is_deterministic_and_complete() -> None:
+    first = parity.build(seed=7, correction_count=5, pipeline_count=6, vote_count=4)
+    second = parity.build(seed=7, correction_count=5, pipeline_count=6, vote_count=4)
+    # Vote cases use random session ids internally but the same outputs.
+    assert first == second
+    poses = first["poses"]
+    case = first["correctionCases"][0]
+    assert len(case["corrections"]) == len(poses)
+    assert all(len(per_pose) == len(parity.LEVELS) for per_pose in case["corrections"])
+    assert set(first["pipelineCases"]) == {"thunder", "lightning"}
+
+
+def test_hashes_ignore_line_endings(tmp_path, monkeypatch) -> None:
+    (tmp_path / "a.py").write_bytes(b"x = 1\r\ny = 2\r\n")
+    (tmp_path / "b.py").write_bytes(b"x = 1\ny = 2\n")
+    monkeypatch.setattr(parity, "REPO", tmp_path)
+    assert parity.source_hash("a.py") == parity.source_hash("b.py")

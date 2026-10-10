@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PoseClassifier,
-  SKELETON_EDGES,
   hasBody,
   keypointsFromMoveNet,
   normalizeKeypoints,
   type ClassifierArtifact,
 } from "pose-core";
-import classifierArtifact from "pose-core/models/classifier.thunder.json";
+import lightningArtifact from "pose-core/models/classifier.lightning.json";
+import thunderArtifact from "pose-core/models/classifier.thunder.json";
 import { PageHeader } from "@/components/PageHeader";
 import {
   RUNTIMES,
@@ -18,7 +18,7 @@ import {
   type PoseEstimator,
   type RuntimeId,
 } from "@/inference";
-import { toFramePoint } from "@/inference/letterbox";
+import { drawSkeleton } from "@/inference/drawSkeleton";
 import { compareRaw, percentile, type ParityResult } from "@/inference/parity";
 
 /** backend/export_lab_fixtures.py output. */
@@ -44,22 +44,27 @@ interface ParityRow extends ParityResult {
   servedMatches: boolean;
 }
 
-const artifact = classifierArtifact as ClassifierArtifact;
-const classifier = new PoseClassifier(artifact);
+// Each MoveNet variant has its own classifier head.
+const classifiers: Record<MoveNetVariant, PoseClassifier> = {
+  thunder: new PoseClassifier(thunderArtifact as ClassifierArtifact),
+  lightning: new PoseClassifier(lightningArtifact as ClassifierArtifact),
+};
 
 /**
  * What the server's image mode would return: a pose only if a body is
  * visible and the classifier clears MIN_CLASS_PROB (yoga_pose_engine.py).
  */
 function served(label: string, probability: number, body: boolean): string {
-  return body && probability >= artifact.thresholds.minClassProb ? label : "nopose";
+  const { minClassProb } = classifiers.thunder.artifact.thresholds;
+  return body && probability >= minClassProb ? label : "nopose";
 }
 
 /** The server's post-MoveNet steps, via pose-core. */
-function classify(raw: ArrayLike<number>) {
+function classify(raw: ArrayLike<number>, variant: MoveNetVariant) {
+  const classifier = classifiers[variant];
   const keypoints = keypointsFromMoveNet(raw);
   const prediction = classifier.predict(normalizeKeypoints(keypoints));
-  return { ...prediction, hasBody: hasBody(keypoints, artifact.thresholds) };
+  return { ...prediction, hasBody: hasBody(keypoints, classifier.artifact.thresholds) };
 }
 
 /** What the lab exposes for scripted runs (and score_web_parity.py). */
@@ -79,7 +84,6 @@ declare global {
 }
 
 const FIXTURES = "/lab/fixtures";
-const SKELETON_MIN_SCORE = 0.25; // same as the server's SKELETON_DRAW_MIN_SCORE
 
 async function loadBitmap(url: string): Promise<ImageBitmap> {
   const blob = await (await fetch(url)).blob();
@@ -142,7 +146,7 @@ export function InferenceLab() {
       const { raw } = await estimator.estimate(bitmap, bitmap.width, bitmap.height);
       bitmap.close();
       const expected = image.expected[estimator.variant];
-      const result = classify(raw);
+      const result = classify(raw, estimator.variant);
       rows.push({
         file: image.file,
         raw: Array.from(raw),
@@ -395,34 +399,7 @@ function LiveView({ estimator, manifest }: { estimator: PoseEstimator; manifest:
 
   const draw = useCallback(
     (frame: CanvasImageSource, width: number, height: number, raw: Float32Array) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx) return;
-      canvas.width = width;
-      canvas.height = height;
-      ctx.drawImage(frame, 0, 0, width, height);
-      const points = keypointsFromMoveNet(raw).map((k) => ({
-        ...toFramePoint(k.x, k.y, width, height),
-        score: k.score,
-      }));
-      ctx.lineWidth = Math.max(2, width / 200);
-      ctx.strokeStyle = "#28dc78";
-      for (const [a, b] of SKELETON_EDGES) {
-        const p = points[a]!;
-        const q = points[b]!;
-        if (p.score < SKELETON_MIN_SCORE || q.score < SKELETON_MIN_SCORE) continue;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(q.x, q.y);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "#ff5a28";
-      for (const p of points) {
-        if (p.score < SKELETON_MIN_SCORE) continue;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.max(3, width / 150), 0, Math.PI * 2);
-        ctx.fill();
-      }
+      if (canvasRef.current) drawSkeleton(canvasRef.current, frame, width, height, raw);
     },
     [],
   );

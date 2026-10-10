@@ -1,8 +1,8 @@
-"""Export the pose classifier for the web app (packages/pose-core).
+"""Export the pose classifiers for the web app (packages/pose-core).
 
     python export_web_artifacts.py
 
-Writes the trained MLP head (backend/models/pose_classifier.keras) as JSON:
+Writes each MoveNet variant's trained MLP head (utils.paths.CLASSIFIER_MODEL_PATHS) as JSON:
 its labels, Dense layer weights and the Python thresholds the TypeScript port
 must share. The weights are read with the same NumpyClassifier the server
 uses, so the browser runs exactly the served model. The source file's
@@ -21,9 +21,9 @@ import numpy as np
 import yoga_pose_engine as engine
 from utils import preprocessing
 from utils.model import NumpyClassifier, load_labels
-from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATH
+from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATHS
 
-DEFAULT_OUT = BASE_DIR.parent / "packages" / "pose-core" / "models" / "classifier.thunder.json"
+DEFAULT_OUT_DIR = BASE_DIR.parent / "packages" / "pose-core" / "models"
 
 
 def float32_list(array: np.ndarray) -> list:
@@ -31,8 +31,9 @@ def float32_list(array: np.ndarray) -> list:
     return [float(f"{v:.9g}") for v in np.asarray(array, dtype=np.float32).reshape(-1)]
 
 
-def build_artifact() -> dict:
-    classifier = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATH)
+def build_artifact(variant: str = "thunder") -> dict:
+    model_path = CLASSIFIER_MODEL_PATHS[variant]
+    classifier = NumpyClassifier.from_keras_file(model_path)
     labels = load_labels()
     layers = []
     for kernel, bias, activation in classifier.layers:
@@ -50,8 +51,9 @@ def build_artifact() -> dict:
         raise ValueError("Output layer size doesn't match pose_labels.json")
     return {
         "description": "Pose classifier exported by backend/export_web_artifacts.py. Do not edit.",
-        "sourceSha256": hashlib.sha256(CLASSIFIER_MODEL_PATH.read_bytes()).hexdigest(),
-        "movenetVariant": "thunder",
+        "sourceFile": model_path.name,
+        "sourceSha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+        "movenetVariant": variant,
         "labels": labels,
         "thresholds": {
             "minClassProb": engine.MIN_CLASS_PROB,
@@ -71,12 +73,14 @@ def build_artifact() -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     args = parser.parse_args()
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    artifact = build_artifact()
-    args.out.write_text(json.dumps(artifact, separators=(",", ":")) + "\n", encoding="utf-8")
-    print(f"Wrote {args.out} ({args.out.stat().st_size // 1024} KB, {len(artifact['labels'])} labels)")
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    for variant in CLASSIFIER_MODEL_PATHS:
+        artifact = build_artifact(variant)
+        out = args.out_dir / f"classifier.{variant}.json"
+        out.write_text(json.dumps(artifact, separators=(",", ":")) + "\n", encoding="utf-8")
+        print(f"Wrote {out} ({out.stat().st_size // 1024} KB, {len(artifact['labels'])} labels)")
 
 
 if __name__ == "__main__":
