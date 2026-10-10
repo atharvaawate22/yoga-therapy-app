@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultFacing, describeCameraError, describeVideoError } from "./camera";
-import { chooseLiveModel } from "./modelChoice";
+import { DOWNGRADE_SAMPLE, WARMUP_FRAMES, chooseLiveModel, shouldDowngrade } from "./modelChoice";
 import { SessionTracker } from "./sessionTracker";
 import { SpeechCoach } from "./speechCoach";
 
@@ -121,5 +121,26 @@ describe("describeVideoError", () => {
     expect(describeVideoError(new DOMException("x", "NotSupportedError")).title).toBe("That video can't be played");
     expect(describeVideoError(new DOMException("x", "AbortError"), true).title).toBe("The video was paused");
     expect(describeVideoError(new DOMException("x", "AbortError"), false).title).toBe("Couldn't play the video");
+  });
+});
+
+describe("shouldDowngrade", () => {
+  const thunder = { variant: "thunder" as const, accelerator: "wasm" as const, reason: "" };
+  const frames = (ms: number) => Array(WARMUP_FRAMES + DOWNGRADE_SAMPLE).fill(ms);
+
+  it("switches Thunder to Lightning when the device is too slow", () => {
+    expect(shouldDowngrade(thunder, frames(220))).toBe(true);
+    expect(shouldDowngrade(thunder, frames(70))).toBe(false);
+  });
+
+  it("ignores slow warm-up frames and waits for a full sample", () => {
+    const warmSlowThenFast = [...Array(WARMUP_FRAMES).fill(900), ...Array(DOWNGRADE_SAMPLE).fill(60)];
+    expect(shouldDowngrade(thunder, warmSlowThenFast)).toBe(false);
+    expect(shouldDowngrade(thunder, frames(300).slice(0, 10))).toBe(false);
+  });
+
+  it("respects an explicit model choice and leaves Lightning alone", () => {
+    expect(shouldDowngrade(thunder, frames(300), new URLSearchParams("model=thunder"))).toBe(false);
+    expect(shouldDowngrade({ ...thunder, variant: "lightning" }, frames(300))).toBe(false);
   });
 });

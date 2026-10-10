@@ -28,6 +28,7 @@ npm 10 rejects, so add dependencies with `npx npm@10 install <pkg>`.
 | `npm test` | Vitest + Testing Library (jsdom) |
 | `npm run build` | Static export to `out/`, then `out/sw.js` (service worker) |
 | `npx playwright test` | End-to-end tests against `out/` in Chromium (build first) |
+| `npm run lighthouse` | Mobile Lighthouse budgets on the main pages (serve `out/` on :4180 first) |
 | `npm run preview` | Serves `out/` locally |
 
 CI: [`.github/workflows/web-ci.yml`](../.github/workflows/web-ci.yml) runs
@@ -124,6 +125,26 @@ and the runtime decision are in the plan, under Progress → M2.
   after one visit, the corrector offline once its model has loaded, and the
   live camera through Chromium's fake camera: Warrior II is recognised,
   matched against the target, corrected, and saved to Progress.
+
+## Performance (M6)
+
+Measured in Chromium on a Windows desktop; phone numbers go in
+[`docs/device-testing.md`](../docs/device-testing.md) (`/lab` → Benchmark this
+device).
+
+- **Lighthouse (mobile), every main page:** performance 93–98, accessibility
+  100, best practices 96 (100 on Linux; the gap is a Windows-only Next export
+  bug), SEO 100. CI fails below 90 / 95 / 95 / 90 (`scripts/lighthouse.mjs`).
+- **Inference runs in a Web Worker** (`src/inference/pose.worker.ts`). On a
+  live session with Thunder on CPU, the main thread went from 64–67 long tasks
+  per ~6 s (70% blocked, taps answered in 32–96 ms) to none (taps in
+  16–24 ms), at the same inference speed (`scripts/measure-live.mjs`).
+- **The corrector page loads lighter.** The classifier weights now load with
+  the model, and WebGPU probing waits for Start. Lighthouse TBT on
+  `/corrector` fell from 220 ms to 30–70 ms.
+- **The model adapts to the device.** If Thunder's median inference exceeds
+  150 ms live, the session switches to Lightning (checked with a 4×
+  throttled CPU), and WebGPU that fails to start falls back to CPU.
 
 Known local quirk: on Windows, Next 16.3's static export writes nested
 prefetch files to the wrong path, so a local `npm run preview` logs 404s for

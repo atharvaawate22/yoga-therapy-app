@@ -45,11 +45,42 @@ export function chooseLiveModel(device: DeviceInfo, params?: URLSearchParams): L
   return choice;
 }
 
-/** Best-effort device detection in the browser. */
+/** Touch-first, phone-sized screen (cheap and synchronous). */
+export function isPhoneDevice(): boolean {
+  return window.matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 900;
+}
+
+/**
+ * Best-effort device detection in the browser. Requesting a WebGPU adapter
+ * can stall the main thread while the GPU process starts, so call this when
+ * a session starts, not when the page loads.
+ */
 export async function detectDevice(): Promise<DeviceInfo> {
-  const isPhone =
-    window.matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 900;
+  const isPhone = isPhoneDevice();
   const webgpu = "gpu" in navigator && Boolean(await navigator.gpu?.requestAdapter().catch(() => null));
   const jspi = typeof (WebAssembly as unknown as { Suspending?: unknown }).Suspending === "function";
   return { isPhone, webgpu, jspi };
+}
+
+/** Median inference time (after warm-up) above which Thunder is too slow live. */
+export const SLOW_INFERENCE_MS = 150;
+/** Frames measured before deciding (after skipping warm-up frames). */
+export const DOWNGRADE_SAMPLE = 15;
+export const WARMUP_FRAMES = 5;
+
+/**
+ * Whether a live session should switch from Thunder to Lightning: the device
+ * turned out too slow for Thunder (under ~7 fps). An explicit `?model=`
+ * choice is respected.
+ */
+export function shouldDowngrade(
+  choice: LiveModelChoice,
+  inferenceMs: readonly number[],
+  params?: URLSearchParams,
+): boolean {
+  if (choice.variant !== "thunder" || params?.get("model")) return false;
+  const sample = inferenceMs.slice(WARMUP_FRAMES, WARMUP_FRAMES + DOWNGRADE_SAMPLE);
+  if (sample.length < DOWNGRADE_SAMPLE) return false;
+  const sorted = [...sample].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]! > SLOW_INFERENCE_MS;
 }

@@ -20,6 +20,9 @@ export function isPrecached(path, demoPhotos = []) {
   // The RN app's original pose PNGs are still emitted (its data files
   // require() them) but the web serves WebP versions instead.
   if (/^_next\/static\/media\/.+\.png$/.test(path)) return false;
+  // Turbopack also copies a worker's TypeScript source next to the compiled
+  // worker chunk; the browser never requests it.
+  if (path.endsWith(".ts")) return false;
   if (path.startsWith("lab/fixtures/")) {
     return path === "lab/fixtures/ATTRIBUTION.md" || demoPhotos.includes(path.slice("lab/fixtures/".length));
   }
