@@ -60,7 +60,7 @@ jobs:
         run: npm test
 
   web:
-    name: web (lint, typecheck, tests, static build)
+    name: web (lint, typecheck, tests, build, e2e)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,6 +91,23 @@ jobs:
 
       - name: Build static export
         run: npm run build
+
+      # Real Chromium against the static export: offline support via the
+      # service worker, the manifest, and the live corrector through a fake
+      # camera that plays a generated clip of a yoga pose.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npx playwright test
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/test-results
+          retention-days: 7
 
       - name: Upload static export
         uses: actions/upload-artifact@v4

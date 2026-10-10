@@ -12,8 +12,24 @@ import rawSuryaSteps from "@app-data/suryaNamaskarData";
 import rawProTips from "@app-data/proTips";
 import { getPoseIcon as rawGetPoseIcon } from "@app-data/poseImages";
 import { POSE_COMMON_NAMES, POSE_SANSKRIT_NAMES } from "@app-data/poseNames";
+import optimizedImages from "./poseImages.generated.json";
 
 export type Level = "beginner" | "intermediate" | "expert";
+
+/** A pose photo as the web serves it (see scripts/generate-images.mjs). */
+export interface WebImage {
+  src: string;
+  /** Responsive candidates, e.g. "/poses/x-480.webp 480w, /poses/x-960.webp 960w". */
+  srcSet: string;
+  width: number;
+  height: number;
+  blurDataURL?: string;
+}
+
+const OPTIMIZED = optimizedImages as Record<
+  string,
+  { width: number; height: number; sources: Record<string, string>; blurDataURL: string }
+>;
 export const LEVELS: readonly Level[] = ["beginner", "intermediate", "expert"];
 
 export interface Pose {
@@ -24,7 +40,7 @@ export interface Pose {
   /** Free text as written in the data, e.g. "30 sec each" (see parseDurationSec). */
   duration: string;
   difficulty: string;
-  image: StaticImageData | null;
+  image: WebImage | null;
   benefits: string[];
   precautions: string[];
   steps: string[];
@@ -44,7 +60,7 @@ export interface SuryaStep {
   description: string;
   /** Suggested hold in seconds. */
   duration: number;
-  image: StaticImageData | null;
+  image: WebImage | null;
   imageId: string;
   /** Classifier label for "Test this pose", or null when the model can't detect it. */
   expectedPoseId: string | null;
@@ -57,12 +73,28 @@ type RawPose = Omit<Pose, "image"> & { image: RawImage };
 
 /**
  * RN `require()` image handles arrive as `{ default: StaticImageData }`
- * under Turbopack (and as the metadata itself under some loaders).
+ * under Turbopack (and as the metadata itself under some loaders). They are
+ * swapped for the WebP versions generated from the same file, matched by
+ * name (Turbopack keeps it: /_next/static/media/<name>.<hash>.png). An image
+ * without a generated version falls back to the original.
  */
-export function toImage(raw: RawImage): StaticImageData | null {
+export function toImage(raw: RawImage): WebImage | null {
   if (!raw) return null;
-  if ("src" in raw) return raw;
-  return raw.default ?? null;
+  const meta = "src" in raw ? raw : raw.default;
+  if (!meta) return null;
+  const name = meta.src.split("/").pop()!.split(".")[0]!;
+  const optimized = OPTIMIZED[name];
+  if (!optimized) {
+    return { src: meta.src, srcSet: "", width: meta.width, height: meta.height, blurDataURL: meta.blurDataURL };
+  }
+  const widths = Object.keys(optimized.sources).map(Number).sort((a, b) => a - b);
+  return {
+    src: optimized.sources[widths.at(-1)!]!,
+    srcSet: widths.map((w) => `${optimized.sources[w]} ${w}w`).join(", "),
+    width: optimized.width,
+    height: optimized.height,
+    blurDataURL: optimized.blurDataURL,
+  };
 }
 
 export function toPose(raw: RawPose): Pose {

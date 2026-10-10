@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   title: { default: "Yoga Therapy", template: "%s · Yoga Therapy" },
   description:
     "Yoga routines for common health problems, with guided practice, voice cues and progress tracking.",
+  // iOS home-screen installs (Safari ignores the manifest's display mode).
+  appleWebApp: { capable: true, title: "Yoga Therapy", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

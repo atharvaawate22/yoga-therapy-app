@@ -1,4 +1,7 @@
+import { existsSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import generated from "./poseImages.generated.json";
 import modelLabels from "../../../backend/models/pose_labels.json";
 import {
   ALL_POSES,
@@ -52,11 +55,34 @@ describe("content from the RN app's src/data", () => {
     expect(tipsFor("Unknown")).toEqual(tipsFor("default"));
   });
 
-  it("unwraps RN image handles", () => {
-    const meta = { src: "/a.png", width: 1, height: 1 };
-    expect(toImage({ default: meta })).toBe(meta);
-    expect(toImage(meta)).toBe(meta);
+  it("swaps RN image handles for the generated WebP versions", () => {
+    const meta = { src: "/_next/static/media/tree_pose.abc123.png", width: 1024, height: 1024 };
+    for (const handle of [{ default: meta }, meta]) {
+      expect(toImage(handle)).toMatchObject({
+        src: "/poses/tree_pose-960.webp",
+        srcSet: "/poses/tree_pose-480.webp 480w, /poses/tree_pose-960.webp 960w",
+        width: 1024,
+      });
+    }
     expect(toImage(null)).toBeNull();
+  });
+
+  it("falls back to the original for an image with no generated version", () => {
+    const meta = { src: "/_next/static/media/new_pose.abc.png", width: 10, height: 10 };
+    expect(toImage(meta)).toMatchObject({ src: meta.src, srcSet: "" });
+  });
+
+  it("has generated WebP files for every RN pose photo", () => {
+    // Fails after adding a photo to assets/poses until
+    // `node scripts/generate-images.mjs` is rerun.
+    // Vitest runs from web/.
+    const assets = resolve("..", "assets", "poses");
+    const publicDir = resolve("public");
+    const names = readdirSync(assets).filter((f) => f.endsWith(".png")).map((f) => f.replace(".png", ""));
+    expect(Object.keys(generated).sort()).toEqual(names.sort());
+    for (const entry of Object.values(generated)) {
+      for (const src of Object.values(entry.sources)) expect(existsSync(publicDir + src)).toBe(true);
+    }
   });
 
   it("has the 12-step Surya Namaskar sequence", () => {

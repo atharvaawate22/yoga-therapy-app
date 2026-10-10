@@ -6,6 +6,7 @@
  */
 import { PoseClassifier, type ClassifierArtifact } from "pose-core";
 import thunderArtifact from "pose-core/models/classifier.thunder.json";
+import { requestPersistentStorage } from "@/lib/pwa/offline";
 import { createEstimator, type ProgressFn } from "./index";
 import type { PoseEstimator } from "./types";
 
@@ -22,6 +23,7 @@ let loading: Promise<PhotoModel> | null = null;
 export function loadPhotoModel(onProgress?: ProgressFn): Promise<PhotoModel> {
   loading ??= (async () => {
     const estimator = await createEstimator("litert-wasm", "thunder", onProgress);
+    requestPersistentStorage(); // keep the now-cached model from being evicted
     return { estimator, classifier: new PoseClassifier(thunderArtifact as ClassifierArtifact) };
   })().catch((error: unknown) => {
     loading = null; // allow a retry

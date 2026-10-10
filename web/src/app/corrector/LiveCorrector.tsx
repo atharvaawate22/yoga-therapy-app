@@ -18,6 +18,7 @@ import {
 import { NO_POSE, TimeWindowVote, analyzeFrame, type Analysis } from "pose-core";
 import { ExperienceBadge } from "@/components/ExperienceBadge";
 import { poseDisplayName, poseSanskritName } from "@/content";
+import demoPhotos from "@/content/demoPhotos.json";
 import { drawSkeleton } from "@/inference/drawSkeleton";
 import { loadLiveModel, type LiveModel } from "@/inference/liveModel";
 import { useSpeech } from "@/lib/hooks/useSpeech";
@@ -38,7 +39,7 @@ import { SpeechCoach } from "@/lib/live/speechCoach";
 import { formatDuration, getProfile, getVoiceEnabled, savePracticeSession } from "@/lib/storage";
 
 /** Credited sample photos (/lab/fixtures/ATTRIBUTION.md) for the no-camera demo. */
-const DEMO_PHOTOS = ["30-warrior_pose.jpg", "25-tree_pose.jpg", "10-downward_dog.jpg", "26-triangle_pose.jpg"];
+const DEMO_PHOTOS = demoPhotos.photos.map((photo) => photo.file);
 const DEMO_PHOTO_MS = 4000;
 
 type SourceKind = "camera" | "video" | "demo";

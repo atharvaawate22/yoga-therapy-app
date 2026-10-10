@@ -14,9 +14,11 @@ import {
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ExperienceBadge } from "@/components/ExperienceBadge";
+import { InstallCard } from "@/components/InstallCard";
 import { PageHeader } from "@/components/PageHeader";
 import { REMINDER_TIMES, buildDailyReminderIcs, downloadText } from "@/lib/ics";
 import { useStored } from "@/lib/hooks/useStored";
+import { cachedModels } from "@/lib/pwa/offline";
 import {
   backupFileName,
   createBackup,
@@ -44,6 +46,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function SettingsView() {
   const { value: profile } = useStored(getProfile);
   const { value: voiceOn, reload: reloadVoice } = useStored(getVoiceEnabled);
+  const { value: offlineModels } = useStored(cachedModels);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -141,6 +144,21 @@ export function SettingsView() {
             ))}
           </div>
         </div>
+      </section>
+
+      <section id="install" aria-label="Install the app" className="flex flex-col gap-3">
+        <SectionLabel>Install the app</SectionLabel>
+        <InstallCard />
+      </section>
+
+      <section aria-label="Offline" className="flex flex-col gap-3">
+        <SectionLabel>Offline</SectionLabel>
+        <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">
+          Routines, practice and your progress work offline once the app has loaded.{" "}
+          {offlineModels && offlineModels.length > 0
+            ? `The pose corrector is ready offline too (${offlineModels.map((m) => `MoveNet ${m[0]!.toUpperCase()}${m.slice(1)}`).join(", ")} saved on this device).`
+            : "Open the pose corrector once while online and it will work offline afterwards."}
+        </p>
       </section>
 
       <section aria-label="Your data" className="flex flex-col gap-3">

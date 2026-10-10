@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { ConditionCard } from "@/components/ConditionCard";
 import { ExperienceBadge } from "@/components/ExperienceBadge";
+import { InstallNudge } from "@/components/InstallNudge";
 import { PoseImage } from "@/components/PoseImage";
 import { WeeklyStreakStrip } from "@/components/WeeklyStreakStrip";
 import { CONDITIONS, poseById, posesForLevel, type Pose } from "@/content";
@@ -108,6 +109,8 @@ export function HomeView() {
           />
         </Link>
       )}
+
+      <InstallNudge hasPractised={Boolean(stats && stats.totalSessions > 0)} />
 
       <Link href="/corrector" className="bg-hero flex items-center gap-4 rounded-2xl p-5">
         <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/15">

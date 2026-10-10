@@ -7,6 +7,7 @@ import { PoseClassifier, type ClassifierArtifact } from "pose-core";
 import lightningArtifact from "pose-core/models/classifier.lightning.json";
 import thunderArtifact from "pose-core/models/classifier.thunder.json";
 import type { LiveModelChoice } from "@/lib/live/modelChoice";
+import { requestPersistentStorage } from "@/lib/pwa/offline";
 import { createEstimator, type ProgressFn } from "./index";
 import type { MoveNetVariant, PoseEstimator } from "./types";
 
@@ -29,6 +30,7 @@ export function loadLiveModel(choice: LiveModelChoice, onProgress?: ProgressFn):
     model = (async () => {
       const runtime = choice.accelerator === "webgpu" ? "litert-webgpu" : "litert-wasm";
       const estimator = await createEstimator(runtime, choice.variant, onProgress);
+      requestPersistentStorage(); // keep the now-cached model from being evicted
       return { estimator, classifier: new PoseClassifier(ARTIFACTS[choice.variant]) };
     })();
     model.catch(() => cache.delete(key)); // allow a retry

@@ -1,6 +1,5 @@
-import Image, { type StaticImageData } from "next/image";
 import { Hand, HandHeart, PersonStanding } from "lucide-react";
-import { poseIconHint } from "@/content";
+import { poseIconHint, type WebImage } from "@/content";
 
 // Placeholders for poses without a photo, standing in for the RN app's
 // MaterialCommunityIcons choices (data/poseImages.js).
@@ -12,25 +11,38 @@ const PLACEHOLDERS = {
 
 interface Props {
   poseId: string;
-  image: StaticImageData | null;
+  image: WebImage | null;
   alt: string;
   className?: string;
-  /** Hint for responsive loading, e.g. "(min-width: 768px) 50vw, 100vw". */
+  /** Hint for picking a srcset candidate, e.g. "(min-width: 768px) 50vw, 100vw". */
   sizes?: string;
   priority?: boolean;
 }
 
-/** A pose's bundled photo, or a themed icon placeholder when it has none. */
+/** A pose's photo (pre-optimised WebP), or a themed icon placeholder. */
 export function PoseImage({ poseId, image, alt, className = "", sizes = "100vw", priority }: Props) {
   if (image) {
     return (
-      <Image
-        src={image}
+      // A static export has no image optimizer; the photos are resized to
+      // WebP at build time (scripts/generate-images.mjs), so a plain <img>
+      // with srcset does the job of next/image here.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={image.src}
+        srcSet={image.srcSet || undefined}
+        sizes={image.srcSet ? sizes : undefined}
+        width={image.width}
+        height={image.height}
         alt={alt}
-        sizes={sizes}
-        priority={priority}
-        placeholder="blur"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
+        decoding="async"
         className={`object-cover ${className}`}
+        style={
+          image.blurDataURL
+            ? { backgroundImage: `url(${image.blurDataURL})`, backgroundSize: "cover" }
+            : undefined
+        }
       />
     );
   }
