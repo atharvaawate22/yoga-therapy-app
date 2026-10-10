@@ -87,6 +87,15 @@ export default function AboutPage() {
         </ol>
       </section>
 
+      <p className="text-sm text-muted">
+        Curious how well the browser matches the server? The{" "}
+        <Link href="/lab" className="font-semibold text-primary hover:underline">
+          inference lab
+        </Link>{" "}
+        runs MoveNet in your browser and compares it with the server&apos;s output on the same
+        photos.
+      </p>
+
       <footer className="border-t border-border pt-6 text-sm text-muted">
         General yoga guidance for education only. Check with a healthcare professional before
         starting a new exercise program.

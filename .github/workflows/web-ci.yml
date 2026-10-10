@@ -6,14 +6,18 @@ on:
     paths:
       - "web/**"
       - "packages/**"
-      # pose-core's contract test reads the Python keypoint definitions.
+      # pose-core's tests check the TypeScript port against the backend: the
+      # keypoint definitions, and that the exported classifier matches the
+      # served model. The web build also copies the .tflite models.
       - "backend/utils/preprocessing.py"
+      - "backend/models/**"
       - ".github/workflows/web-ci.yml"
   pull_request:
     paths:
       - "web/**"
       - "packages/**"
       - "backend/utils/preprocessing.py"
+      - "backend/models/**"
       - ".github/workflows/web-ci.yml"
   workflow_dispatch: {}
 
