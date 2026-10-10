@@ -17,7 +17,12 @@ const PAGES = ["/", "/conditions/back-pain", "/poses/tree_pose", "/corrector", "
 const BUDGET = { performance: 90, accessibility: 95, "best-practices": 95, seo: 90 };
 const CATEGORIES = Object.keys(BUDGET);
 
-const chrome = await launch({ chromePath: chromium.executablePath(), chromeFlags: ["--headless=new"] });
+// GitHub's Ubuntu runners block Chrome's sandbox (AppArmor restricts user
+// namespaces), and Chrome then exits before opening its debugging port.
+// Playwright passes --no-sandbox for the same reason; it's only ever pointed
+// at the local static build here.
+const chromeFlags = ["--headless=new", ...(process.env.CI ? ["--no-sandbox"] : [])];
+const chrome = await launch({ chromePath: chromium.executablePath(), chromeFlags });
 const results = [];
 try {
   for (const path of PAGES) {
