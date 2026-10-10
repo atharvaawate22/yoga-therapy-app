@@ -1,0 +1,23 @@
+{
+  "name": "pose-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-free pose logic shared by the web app (and later the RN app): keypoint contract, features, gating, classifier, smoothing, corrections.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

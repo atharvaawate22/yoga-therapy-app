@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* Palette carried over from the RN app (src/theme/theme.js) so the two
+   clients read as one product. Dark values are new for the web. */
+:root {
+  --background: #f5f9f4;
+  --surface: #ffffff;
+  --surface-alt: #f1f8e9;
+  --foreground: #1a2e1a;
+  --muted: #5f7161;
+  --border: #c8e6c9;
+  --primary: #2e7d32;
+  --primary-strong: #1b5e20;
+  --on-primary: #ffffff;
+  --accent: #00bfa5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1a10;
+    --surface: #172418;
+    --surface-alt: #1d2e1e;
+    --foreground: #e6f0e6;
+    --muted: #a3b8a5;
+    --border: #2c4430;
+    --primary: #66bb6a;
+    --primary-strong: #81c784;
+    --on-primary: #0f1a10;
+    --accent: #4de0c8;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

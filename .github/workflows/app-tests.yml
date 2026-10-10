@@ -5,10 +5,16 @@ on:
     branches: [main]
     paths-ignore:
       - "backend/**"
+      - "web/**"
+      - "packages/**"
+      - ".github/workflows/web-ci.yml"
       - "**/*.md"
   pull_request:
     paths-ignore:
       - "backend/**"
+      - "web/**"
+      - "packages/**"
+      - ".github/workflows/web-ci.yml"
       - "**/*.md"
   workflow_dispatch: {}
 

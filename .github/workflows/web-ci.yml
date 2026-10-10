@@ -1,0 +1,89 @@
+name: Web CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "packages/**"
+      # pose-core's contract test reads the Python keypoint definitions.
+      - "backend/utils/preprocessing.py"
+      - ".github/workflows/web-ci.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "packages/**"
+      - "backend/utils/preprocessing.py"
+      - ".github/workflows/web-ci.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pose-core:
+    name: pose-core (typecheck + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/pose-core
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/pose-core/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+  web:
+    name: web (lint, typecheck, tests, static build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Links ../packages/pose-core in as a file: dependency.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build static export
+        run: npm run build
+
+      - name: Upload static export
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+          retention-days: 7
