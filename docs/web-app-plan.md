@@ -458,6 +458,15 @@ Effort is in focused working days for one person. Each milestone ends with somet
   - No Vercel "Ignored Build Step": static builds are cheap, and a `HEAD^` diff can wrongly skip multi-commit pushes.
 - Pending (needs Atharva's accounts): Vercel project (Root Directory `web`) and the `yoga.atharvaawate.me` CNAME. Steps are in `web/README.md`.
 
+**M1 (non-camera app on web): done on branch `web/m1-app`, stacked on M0.**
+
+- All screens except the camera corrector: Home (onboarding gate), Health Scanner, 11 condition pages and 18 pose pages (prerendered), guided practice, Surya Namaskar, custom sets (list, create/edit with reordering, view), progress, settings, profile, and an honest corrector placeholder.
+- Content and storage logic are reused from `src/data` rather than copied. AsyncStorage is aliased to a localStorage shim with an in-memory fallback, so streak and stats code is shared with the APK. The RN app is unchanged.
+- Web substitutes: Web Speech, Wake Lock, native `<dialog>`, `.ics` daily reminder, JSON export/import.
+- Tests: 63 Vitest tests (practice and Surya state machines, `.ics`, backup validation, storage shim, content contract vs `pose_labels.json`, routine resolution, dialog, profile form, set editor).
+- Checked in a browser at phone and desktop widths, light and dark. Fixed from that pass: views opening scrolled to the bottom; the set-editor error appearing off screen; destructive dialogs focusing the destructive button.
+- Deferred to M5 as planned: pose photos are still the original ~1 MB PNGs.
+
 # Decisions (2026-10-08)
 
 Atharva accepted the recommendation on every open question:
