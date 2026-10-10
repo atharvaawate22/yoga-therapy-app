@@ -605,6 +605,22 @@ Effort is in focused working days for one person. Each milestone ends with somet
   - TypeScript was type-checking `out/`, where Turbopack copies the worker's `.ts` source.
   - That `.ts` copy would also have been precached; it no longer is.
 
+**M7 (docs & story): done on branch `web/m7-docs`, stacked on M6.**
+
+- **Root README restructured** around v1 (Android app, cloud inference) and v2 (installable web app, on-device inference):
+  - Live demo and APK buttons, CI badges, and a "Try it in 30 seconds" section with the `?demo=1` link
+  - A v1-vs-v2 table and a Mermaid architecture diagram (checked to render with Mermaid 11)
+  - Measured results: classifier, browser/server parity, web performance and Lighthouse. Phone rows say "pending" rather than guessing
+  - Design decisions, the Web vs Android table (§E), and testing and CI
+- **Demo GIF** (`assets/readme/web-demo.gif`, 347 KB): recorded by `web/scripts/record-demo.mjs` (`npm run demo:gif`) from the real static build's `?demo=1`, so the labels and cues are real model output. Re-record it once the sample videos exist.
+- **ADRs:** `docs/adr/` has ten short records (in-browser inference, Next.js over Expo web, LiteRT.js, padding, golden parity, the time-window vote, calendar reminders, the service worker, the Web Worker, the model per device).
+- **Stale lines from audit item 9.3 fixed:**
+  - The root README's Tech Stack now says Thunder.
+  - The backend README says padding, not cropping, and lists `/warmup`.
+  - The `movenet.py` docstring is fixed.
+  - The RN corrector's "center-crops" comment is left alone, so the Android app stays untouched.
+- **CI fix (on M6):** Lighthouse's Chrome now gets `--no-sandbox` on CI. GitHub's Ubuntu runners block Chrome's sandbox, so chrome-launcher timed out.
+
 # Decisions (2026-10-08)
 
 Atharva accepted the recommendation on every open question:

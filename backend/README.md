@@ -29,13 +29,15 @@ k8s/                        Minikube-oriented Deployment + Service
 
 The trainer, the evaluator and the server all extract features through
 `utils/dataset.py` → `utils/preprocessing.py`. Training and serving therefore
-apply the identical square crop, keypoint normalization and body-presence gate
+apply the identical square padding, keypoint normalization and body-presence gate
 by construction rather than by convention.
 
 ## Endpoints
 
 - `GET /health` — liveness/model-availability probe (returns JSON). Cheap by
   design: it does not force a model load.
+- `GET /warmup` — loads both models now, so the user's first analysis doesn't
+  pay for it. The app calls it when the corrector opens.
 - `POST /analyze-pose` — body `{ image_base64, session_id?, source, experience_level }`
   → `{ pose, confidence, corrections, distances, probabilities, debug_image_base64 }`
 

@@ -5,10 +5,15 @@ Router), TypeScript, Tailwind, built as a fully static export. Pose logic lives
 in [`../packages/pose-core`](../packages/pose-core) and is shared with the
 Python backend's contract through parity tests.
 
-Status and roadmap: [`docs/web-app-plan.md`](../docs/web-app-plan.md).
-Milestone M1 is in: everything in the Android app except the camera pose
-corrector (routines, guided practice, Surya Namaskar, custom sets, favorites,
-progress, settings), stored in the browser with JSON backup and restore.
+It has everything the Android app has: routines, guided practice, Surya
+Namaskar, custom sets, favorites, progress and settings, stored in the browser
+with JSON backup and restore. The live pose corrector runs MoveNet on the
+device, and the app installs to the home screen and works offline.
+
+The overview, the architecture diagram and the measured results are in the
+[root README](../README.md). The decisions are in [`docs/adr`](../docs/adr/README.md),
+and the audit, plan and milestone log are in
+[`docs/web-app-plan.md`](../docs/web-app-plan.md).
 
 ## Develop
 
@@ -30,6 +35,7 @@ npm 10 rejects, so add dependencies with `npx npm@10 install <pkg>`.
 | `npx playwright test` | End-to-end tests against `out/` in Chromium (build first) |
 | `npm run lighthouse` | Mobile Lighthouse budgets on the main pages (serve `out/` on :4180 first) |
 | `npm run preview` | Serves `out/` locally |
+| `npm run demo:gif` | Records the README's demo GIF from `out/` (`/corrector?demo=1`) |
 
 CI: [`.github/workflows/web-ci.yml`](../.github/workflows/web-ci.yml) runs
 all of the above for `web/` and `packages/` on every PR and on pushes to
