@@ -557,6 +557,33 @@ Effort is in focused working days for one person. Each milestone ends with somet
 - **Sample videos (decision #4)** still need recording. `public/demo/videos.json` is empty, and each clip added there becomes a "Sample" button (format in `web/README.md`).
 - **Tests:** pose-core 107, web 91.
 
+**M5 (PWA & offline): done on branch `web/m5-pwa`, stacked on M4.**
+
+- **Installable.**
+  - `app/manifest.ts`: standalone, portrait, theme and background colours from the APK, 192/512 and maskable icons, shortcuts.
+  - `appleWebApp` metadata for iOS.
+  - Settings has an Install card (the browser prompt on Chrome/Android, Share → Add to Home Screen steps on iOS).
+  - Home shows a dismissible install nudge, only after the first practice session.
+- **Service worker** (`sw/sw.js` + `scripts/build-sw.mjs` + `scripts/sw-manifest.mjs`). It is hand-written instead of Serwist: a static export is a complete file list, so a dependency-free worker is easier to reason about and test, and Serwist's Next integration is webpack-first while this app builds with Turbopack.
+  - **Precache** at install: all pages, RSC payloads, hashed assets, fonts, icons, the WebP pose photos and the 4 demo photos (about 5.7 MB; about 1.2 MB of it is the lab-only TF.js chunk, accepted rather than filtered with fragile heuristics).
+  - **Runtime cache:** the models and LiteRT WASM on first use.
+  - Both caches are versioned by content hash; a new deploy waits for the user's "Reload".
+  - `navigator.storage.persist()` is requested after the first model load.
+- **Images.** `scripts/generate-images.mjs` turns 7.9 MB of pose PNGs into 0.23 MB of WebP (480/960 px with a blur placeholder) and makes the icons. The content layer maps the RN image handles to them; a test fails if a photo lacks its WebP version.
+- **End-to-end tests (Playwright, Chromium, in CI).** The in-app browser pane can't run service workers, so offline behaviour is verified in headless Chromium. Five tests:
+  1. The manifest is valid and its icons load.
+  2. The app works offline after one visit (pages, photos, client navigation).
+  3. The corrector works offline once its model has loaded.
+  4. The live camera, via Chromium's fake camera playing a generated Warrior II clip, recognises the pose, matches the target, shows corrections, and saves a 16 s session to Progress. This is the first verification of M4's real camera path.
+  5. `?demo=1` starts the demo.
+- **Bugs found by these tests, now fixed:**
+  - The build script's placeholder replacement hit a comment first, leaving a worker that threw on load. A regression test now covers it.
+  - The first service-worker install reloaded the page under a new visitor (`clients.claim` fired `controllerchange`). The page now reloads only after the user taps "Reload".
+- **Tests:** web unit 116, e2e 5 (about 30 s locally).
+- **Not done:**
+  - Screenshots for the richer Android install sheet (optional in the manifest).
+  - An automated test of the update banner across two deploys.
+
 # Decisions (2026-10-08)
 
 Atharva accepted the recommendation on every open question:

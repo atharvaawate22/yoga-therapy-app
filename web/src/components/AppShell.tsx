@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChartColumn, House, Settings, type LucideIcon } from "lucide-react";
 import { useClientValue } from "@/lib/hooks/useClientValue";
+import { useServiceWorker } from "@/lib/pwa/useServiceWorker";
 import { isPersistent } from "@/lib/storage/asyncStorageShim";
 
 const TABS: ReadonlyArray<{ href: string; label: string; icon: LucideIcon }> = [
@@ -23,6 +24,7 @@ function isActive(pathname: string, href: string): boolean {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const storageOk = useClientValue(isPersistent, true);
+  const { updateReady, applyUpdate } = useServiceWorker();
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -51,6 +53,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
+
+      {updateReady && (
+        <div role="status" className="flex items-center justify-center gap-3 bg-primary px-4 py-2 text-sm text-on-primary">
+          A new version of the app is ready.
+          <button
+            type="button"
+            onClick={applyUpdate}
+            className="rounded-md bg-on-primary px-3 py-1 font-semibold text-primary"
+          >
+            Reload
+          </button>
+        </div>
+      )}
 
       {!storageOk && (
         <p role="status" className="bg-[#fff3e0] px-4 py-2 text-center text-sm text-[#7a3e00]">

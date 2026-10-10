@@ -1,0 +1,83 @@
+{
+  "butterfly_pose": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/butterfly_pose-480.webp",
+      "960": "/poses/butterfly_pose-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRnAAAABXRUJQVlA4IGQAAABwAgCdASoQABAAA4BaJYwBTAFwHb++W9b1MqAAAP73DvInJD+b2CusU0n5vcpYgI47uIHv/8ExnTFaqsB0V22UTBT5866nlTBRCWY6t7+NDeR8/dTeeI5k6Y7iHNUTZKJgr4AA"
+  },
+  "cat_cow": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/cat_cow-480.webp",
+      "960": "/poses/cat_cow-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRmAAAABXRUJQVlA4IFQAAAAQAgCdASoQABAAA4BaJZwAAudfmJHV0CXAAP7z4bnq2/kDe2dl34gbC6uh4DOpXCumj6o16bfTIfLybnc30hwrylFEdKTDJ4EmqD8DMqZguHAmgAA="
+  },
+  "childs_pose": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/childs_pose-480.webp",
+      "960": "/poses/childs_pose-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAADQAQCdASoQABAAA4BaJZwAAudUlYdEgAD+83kGshGMrQNskItI33dxy7Woe9+pWKwfOaN9QItVwvLaMGajwdoSwC1DsEIAAAA="
+  },
+  "cobra_pose": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/cobra_pose-480.webp",
+      "960": "/poses/cobra_pose-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRkgAAABXRUJQVlA4IDwAAADQAQCdASoQABAAA4BaJQBOgCHfjclgAAD+825Kx4hFdMRpbkFL/727zl6PmRgB43qyvOlA1IZ2Ck/kAAA="
+  },
+  "downward_dog": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/downward_dog-480.webp",
+      "960": "/poses/downward_dog-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRmQAAABXRUJQVlA4IFgAAAAwAgCdASoQABAAA4BaJYwAD4wQb32wPp3qAAD+9NOiJ5rrrW/H7uQbxdtTfK6oLXdXYnX15WXryZWJCjPbVQH2Ovfcz5kOvgfvM4gtJbXsBRHK3QxDQAAA"
+  },
+  "low_lunge": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/low_lunge-480.webp",
+      "960": "/poses/low_lunge-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRmwAAABXRUJQVlA4IGAAAABwAgCdASoQABAAA4BaJZQC7H8Agoy9P4yHdyEAAP73EFELeUL7h92uUBe6ZqX4OiOWzVBpyQL0P05OMN+eXFUi205xGCyIbVc3+C+re3+abcm9eAM+QyTxq/A6WxYAAAA="
+  },
+  "seated_twist": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/seated_twist-480.webp",
+      "960": "/poses/seated_twist-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAADwAQCdASoQABAAA4BaJYwAAudfWkuVd2gA/vUUSMLW7sjhUGRQ9lDbFt5yVWZftOuuOJJEl1102x3M+1NVsOl5itEp0AzAahTe79DgAAA="
+  },
+  "tree_pose": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/tree_pose-480.webp",
+      "960": "/poses/tree_pose-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRlAAAABXRUJQVlA4IEQAAADwAQCdASoQABAAA4BaJYgCdAEO/ErcpgAA/u/SLGkB6uRe95y+cZhpyNLCb9gVurFvB2sCZzmmYf2RwJxFAD2GEwacAA=="
+  },
+  "warrior_pose": {
+    "width": 1024,
+    "height": 1024,
+    "sources": {
+      "480": "/poses/warrior_pose-480.webp",
+      "960": "/poses/warrior_pose-960.webp"
+    },
+    "blurDataURL": "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAAAQAgCdASoQABAAA4BaJaACdAEPACjgAz1AAP7qgYmZ7YE2ikSQqAg3dY9sxkRnkmjlpSlhh+Kk87bIQt2GE8aiSBgVVv8O3NyJIAAA"
+  }
+}

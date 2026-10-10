@@ -6,17 +6,14 @@ import { CircleCheck, CircleDashed, ImageUp, Loader2, ShieldCheck } from "lucide
 import { NO_POSE, analyzeFrame, type Analysis } from "pose-core";
 import { ExperienceBadge } from "@/components/ExperienceBadge";
 import { poseDisplayName, poseSanskritName } from "@/content";
+import demoPhotos from "@/content/demoPhotos.json";
 import { drawSkeleton } from "@/inference/drawSkeleton";
 import { decodePhoto, loadPhotoModel } from "@/inference/photoModel";
 import { useStored } from "@/lib/hooks/useStored";
 import { getProfile } from "@/lib/storage";
 
 /** Freely licensed sample photos (credits in /lab/fixtures/ATTRIBUTION.md). */
-const SAMPLES = [
-  { file: "30-warrior_pose.jpg", label: "Warrior II" },
-  { file: "25-tree_pose.jpg", label: "Tree Pose" },
-  { file: "10-downward_dog.jpg", label: "Downward Dog" },
-];
+const SAMPLES = demoPhotos.photos.slice(0, 3);
 
 type Status =
   | { kind: "idle" }

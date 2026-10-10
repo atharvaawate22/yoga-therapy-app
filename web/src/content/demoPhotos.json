@@ -1,0 +1,9 @@
+{
+  "description": "Credited sample photos (public/lab/fixtures, see ATTRIBUTION.md) used by the corrector's demo and photo samples. The service worker precaches exactly these.",
+  "photos": [
+    { "file": "30-warrior_pose.jpg", "label": "Warrior II" },
+    { "file": "25-tree_pose.jpg", "label": "Tree Pose" },
+    { "file": "10-downward_dog.jpg", "label": "Downward Dog" },
+    { "file": "26-triangle_pose.jpg", "label": "Triangle Pose" }
+  ]
+}

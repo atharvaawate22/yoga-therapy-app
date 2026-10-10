@@ -43,3 +43,7 @@ next-env.d.ts
 # copied in by scripts/copy-runtime-assets.mjs
 /public/models/
 /public/litert/
+
+# Playwright
+/test-results/
+/playwright-report/
