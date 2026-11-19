@@ -101,6 +101,77 @@ jobs:
             aws lambda wait function-active --function-name "$LAMBDA_FUNCTION_NAME"
           fi
 
+      # The route, integration and stage were first set up by hand, so nothing
+      # restored them when they went missing (every path returned API
+      # Gateway's own 404, Nov 2026). Recreate whatever is missing on every
+      # deploy. Each call is skipped when the piece already exists.
+      - name: Ensure API Gateway routes to the function
+        run: |
+          ROUTE_KEY='$default'
+          STAGE_NAME='$default'
+          FUNCTION_ARN=$(aws lambda get-function --function-name "$LAMBDA_FUNCTION_NAME" \
+            --query 'Configuration.FunctionArn' --output text)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+          # 1. Lambda proxy integration pointing at the function.
+          INTEGRATION_ID=$(aws apigatewayv2 get-integrations --api-id "$API_GATEWAY_ID" \
+            --query "Items[?IntegrationType=='AWS_PROXY' && contains(IntegrationUri, '$LAMBDA_FUNCTION_NAME')].IntegrationId | [0]" \
+            --output text)
+          if [ -z "$INTEGRATION_ID" ] || [ "$INTEGRATION_ID" = "None" ]; then
+            INTEGRATION_ID=$(aws apigatewayv2 create-integration \
+              --api-id "$API_GATEWAY_ID" \
+              --integration-type AWS_PROXY \
+              --integration-uri "$FUNCTION_ARN" \
+              --payload-format-version 2.0 \
+              --timeout-in-millis 30000 \
+              --query IntegrationId --output text)
+            echo "Created integration $INTEGRATION_ID"
+          else
+            echo "Integration $INTEGRATION_ID exists"
+          fi
+          TARGET="integrations/$INTEGRATION_ID"
+
+          # 2. Catch-all route ($default) sending every path to that integration.
+          ROUTE=$(aws apigatewayv2 get-routes --api-id "$API_GATEWAY_ID" \
+            --query "Items[?RouteKey=='$ROUTE_KEY'] | [0].[RouteId,Target]" --output text)
+          ROUTE_ID=$(echo "$ROUTE" | cut -f1)
+          ROUTE_TARGET=$(echo "$ROUTE" | cut -f2)
+          if [ -z "$ROUTE_ID" ] || [ "$ROUTE_ID" = "None" ]; then
+            aws apigatewayv2 create-route --api-id "$API_GATEWAY_ID" \
+              --route-key "$ROUTE_KEY" --target "$TARGET" --no-cli-pager >/dev/null
+            echo "Created route $ROUTE_KEY -> $TARGET"
+          elif [ "$ROUTE_TARGET" != "$TARGET" ]; then
+            aws apigatewayv2 update-route --api-id "$API_GATEWAY_ID" \
+              --route-id "$ROUTE_ID" --target "$TARGET" --no-cli-pager >/dev/null
+            echo "Pointed route $ROUTE_KEY at $TARGET (was '$ROUTE_TARGET')"
+          else
+            echo "Route $ROUTE_KEY -> $TARGET exists"
+          fi
+
+          # 3. Auto-deploying $default stage, so the URL has no stage prefix.
+          if aws apigatewayv2 get-stage --api-id "$API_GATEWAY_ID" --stage-name "$STAGE_NAME" >/dev/null 2>&1; then
+            aws apigatewayv2 update-stage --api-id "$API_GATEWAY_ID" \
+              --stage-name "$STAGE_NAME" --auto-deploy --no-cli-pager >/dev/null
+            echo "Stage $STAGE_NAME exists (auto-deploy on)"
+          else
+            aws apigatewayv2 create-stage --api-id "$API_GATEWAY_ID" \
+              --stage-name "$STAGE_NAME" --auto-deploy --no-cli-pager >/dev/null
+            echo "Created stage $STAGE_NAME"
+          fi
+
+          # 4. Let this API invoke the function. A conflict means it already can.
+          OUT=$(aws lambda add-permission \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --statement-id "apigateway-$API_GATEWAY_ID" \
+            --action lambda:InvokeFunction \
+            --principal apigateway.amazonaws.com \
+            --source-arn "arn:aws:execute-api:$AWS_REGION:$ACCOUNT_ID:$API_GATEWAY_ID/*" \
+            --no-cli-pager 2>&1) && echo "Granted API Gateway invoke permission" || {
+              echo "$OUT" | grep -q ResourceConflictException \
+                && echo "Invoke permission exists" \
+                || { echo "$OUT"; exit 1; }
+            }
+
       - name: Apply API Gateway throttling
         run: |
           STAGES=$(aws apigatewayv2 get-stages --api-id "$API_GATEWAY_ID" --query 'Items[].StageName' --output text)
@@ -112,6 +183,20 @@ jobs:
               --no-cli-pager >/dev/null
             echo "Throttled stage '$STAGE': rate=$THROTTLE_RATE_LIMIT/s burst=$THROTTLE_BURST_LIMIT"
           done
+
+      # Fails the deploy if the public URL doesn't reach the app, instead of
+      # reporting success while every request 404s. Retries cover cold starts.
+      - name: Check the public API
+        run: |
+          URL="https://$API_GATEWAY_ID.execute-api.$AWS_REGION.amazonaws.com/health"
+          for i in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o body.txt -w '%{http_code}' -m 35 "$URL" || true)
+            echo "Attempt $i: HTTP $CODE $(head -c 200 body.txt 2>/dev/null)"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::$URL did not return 200 after deploy"
+          exit 1
 
       # The app calls API Gateway, not a Lambda Function URL (this account
       # blocks anonymous Function URL invocation; see src/config/poseApi.js).
