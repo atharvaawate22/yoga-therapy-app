@@ -38,10 +38,11 @@ steps and a feature walkthrough.
 
 <table>
   <tr>
-    <td width="25%"><a href="assets/readme/home.png"><img src="assets/readme/home.png" alt="Home screen with the AI pose corrector, quick actions and conditions" /></a><br /><sub><b>Home</b>: pose corrector, quick actions and conditions</sub></td>
-    <td width="25%"><a href="assets/readme/condition.png"><img src="assets/readme/condition.png" alt="Back pain condition page with recommended poses and guided practice" /></a><br /><sub><b>Condition</b>: poses for your level, with guided practice</sub></td>
-    <td width="25%"><a href="assets/readme/pose.png"><img src="assets/readme/pose.png" alt="Tree pose detail page with duration and level" /></a><br /><sub><b>Pose detail</b>: duration, level and benefits</sub></td>
-    <td width="25%"><a href="assets/readme/surya.png"><img src="assets/readme/surya.png" alt="Surya Namaskar 12-step sequence with round counter" /></a><br /><sub><b>Surya Namaskar</b>: 12-step sequence with breath cues</sub></td>
+    <td width="20%"><a href="assets/readme/onboarding.png"><img src="assets/readme/onboarding.png" alt="Onboarding screen asking for a name and experience level" /></a><br /><sub><b>Onboarding</b>: name and experience level, stored on the device</sub></td>
+    <td width="20%"><a href="assets/readme/home.png"><img src="assets/readme/home.png" alt="Home screen with the AI pose corrector, quick actions and conditions" /></a><br /><sub><b>Home</b>: pose corrector, quick actions and conditions</sub></td>
+    <td width="20%"><a href="assets/readme/condition.png"><img src="assets/readme/condition.png" alt="Back pain condition page with recommended poses and guided practice" /></a><br /><sub><b>Condition</b>: poses for your level, with guided practice</sub></td>
+    <td width="20%"><a href="assets/readme/pose.png"><img src="assets/readme/pose.png" alt="Tree pose detail page with duration and level" /></a><br /><sub><b>Pose detail</b>: duration, level and benefits</sub></td>
+    <td width="20%"><a href="assets/readme/surya.png"><img src="assets/readme/surya.png" alt="Surya Namaskar 12-step sequence with round counter" /></a><br /><sub><b>Surya Namaskar</b>: 12-step sequence with breath cues</sub></td>
   </tr>
 </table>
 
