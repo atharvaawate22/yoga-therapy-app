@@ -36,6 +36,9 @@ steps and a feature walkthrough.
 
 ## Screenshots
 
+Captured from the web version of the app (`web/`, see below), which shares the
+Android app's poses, routines and on-device storage.
+
 <table>
   <tr>
     <td width="20%"><a href="assets/readme/onboarding.png"><img src="assets/readme/onboarding.png" alt="Onboarding screen asking for a name and experience level" /></a><br /><sub><b>Onboarding</b>: name and experience level, stored on the device</sub></td>
@@ -98,8 +101,8 @@ within 3×10⁻⁷). Models load in under a second, down from timing out the
 30 s gateway.
 The app pre-warms the server when the corrector opens.
 
-**Delivery.** 227 backend tests and 33 app tests (including an app↔model
-contract test) run in CI. Each backend deploy builds the image and smoke-tests
+**Delivery.** 238 backend tests, 33 app tests (including an app↔model
+contract test) and 151 web and pose-core tests run in CI. Each backend deploy builds the image and smoke-tests
 the real models inside it before pushing. The public API is rate-limited.
 Every app change builds an APK with EAS and publishes it to the download link
 above.
@@ -112,16 +115,21 @@ above.
 - Expo Camera, Image Picker, Speech
 - Functional Components with React Hooks
 
+**Web app** (`web/`)
+- Next.js (App Router), TypeScript and Tailwind, built as a static, installable PWA
+- Every non-camera feature of the Android app, stored in the browser
+- Shared pose logic in `packages/pose-core`, checked against the Python backend with parity tests
+
 **Pose-analysis backend**
 - FastAPI + Uvicorn, hosted on AWS Lambda (container image) behind API Gateway
-- MoveNet SinglePose Lightning keypoints, run on LiteRT (the standalone TFLite runtime)
+- MoveNet SinglePose Thunder keypoints (Lightning selectable), run on LiteRT (the standalone TFLite runtime)
 - A small MLP pose classifier, trained with TensorFlow/Keras and served with plain NumPy
 - OpenCV, Pillow, NumPy
 
 ## Project Structure
 
 The React Native app lives at the repository root; the Python pose-analysis
-service is self-contained under `backend/`.
+service is self-contained under `backend/`, and the web version under `web/`.
 
 ```
 ├── App.js                          # App entry point
@@ -141,6 +149,10 @@ service is self-contained under `backend/`.
 │   ├── navigation/                 # Bottom tabs + native stack
 │   ├── theme/                      # Centralized design system
 │   └── utils/                      # reminders, uploadImage
+│
+├── web/                            # Next.js PWA version of the app (see web/README.md)
+├── packages/pose-core/             # Pose logic shared by the web app, parity-tested
+├── docs/                           # Web app plan, recording guide
 │
 └── backend/                        # Python pose-analysis service (independent of the app)
     ├── yoga_pose_engine.py         # FastAPI server (pose detection + corrections)
