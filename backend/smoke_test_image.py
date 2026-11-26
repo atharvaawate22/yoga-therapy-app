@@ -55,6 +55,20 @@ assert response.debug_image_base64 is None
 probs = classifier.predict(np.zeros(34, dtype=np.float32))
 assert abs(sum(probs.values()) - 1.0) < 1e-4, probs
 
+# The EventBridge warm ping invokes the function directly with this event
+# (deploy-lambda-backend.yml). If Mangum can't route it, every ping fails
+# silently and nothing stays warm.
+import json  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+import lambda_handler  # noqa: E402
+
+with open("lambda_warm_event.json", encoding="utf-8") as handle:
+    warm_event = json.load(handle)
+warm = lambda_handler.handler(warm_event, SimpleNamespace())
+assert warm["statusCode"] == 200, warm
+assert json.loads(warm["body"]) == {"status": "ok", "classifier_ready": True}, warm
+
 print(f"smoke test passed: runtimes loaded in {load_seconds:.1f}s, "
       f"{len(classifier.labels)} classes, interpreter={interpreter_module}")
 sys.exit(0)

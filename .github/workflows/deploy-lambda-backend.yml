@@ -19,6 +19,10 @@ env:
   # rates to bound the Lambda bill. One live session sends about 1 req/s.
   THROTTLE_RATE_LIMIT: "10"
   THROTTLE_BURST_LIMIT: "20"
+  # EventBridge rule that calls /warmup every 5 minutes so one container stays
+  # loaded; a cold model load takes several seconds (see the warm ping step).
+  WARM_RULE_NAME: yoga-pose-engine-warm
+  WARM_SCHEDULE: rate(5 minutes)
   LAMBDA_TIMEOUT: "30"
   # Peak use is ~240 MB, but Lambda scales CPU with memory, so this also
   # sets inference speed.
@@ -187,6 +191,44 @@ jobs:
             --no-cli-pager 2>&1) && echo "Granted API Gateway invoke permission" || {
               echo "$OUT" | grep -q ResourceConflictException \
                 && echo "Invoke permission exists" \
+                || { echo "$OUT"; exit 1; }
+            }
+
+      # A cold container spends several seconds reading the models from the
+      # image before its first analysis. Invoke /warmup every 5 minutes so one
+      # container stays loaded. EventBridge calls the function directly (not
+      # through API Gateway, so it doesn't use the throttle) with an HTTP API
+      # event that Mangum routes to GET /warmup; the smoke test above runs the
+      # same event through the handler. put-rule and put-targets are
+      # idempotent, so this just re-applies on every deploy.
+      - name: Ensure warm ping schedule
+        run: |
+          RULE_ARN=$(aws events put-rule \
+            --name "$WARM_RULE_NAME" \
+            --schedule-expression "$WARM_SCHEDULE" \
+            --state ENABLED \
+            --description "Keep $LAMBDA_FUNCTION_NAME warm: GET /warmup" \
+            --query RuleArn --output text)
+          FUNCTION_ARN=$(aws lambda get-function --function-name "$LAMBDA_FUNCTION_NAME" \
+            --query 'Configuration.FunctionArn' --output text)
+          TARGETS=$(jq -cn --arg arn "$FUNCTION_ARN" \
+            --arg input "$(jq -c . backend/lambda_warm_event.json)" \
+            '[{Id: "warmup", Arn: $arn, Input: $input}]')
+          aws events put-targets --rule "$WARM_RULE_NAME" --targets "$TARGETS" \
+            --query 'FailedEntryCount' --output text | grep -qx 0 \
+            || { echo "::error::put-targets failed for $WARM_RULE_NAME"; exit 1; }
+          echo "Rule $WARM_RULE_NAME ($WARM_SCHEDULE) -> $LAMBDA_FUNCTION_NAME"
+
+          # Let EventBridge invoke the function. A conflict means it already can.
+          OUT=$(aws lambda add-permission \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --statement-id "eventbridge-$WARM_RULE_NAME" \
+            --action lambda:InvokeFunction \
+            --principal events.amazonaws.com \
+            --source-arn "$RULE_ARN" \
+            --no-cli-pager 2>&1) && echo "Granted EventBridge invoke permission" || {
+              echo "$OUT" | grep -q ResourceConflictException \
+                && echo "EventBridge invoke permission exists" \
                 || { echo "$OUT"; exit 1; }
             }
 

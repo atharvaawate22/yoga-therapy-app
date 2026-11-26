@@ -16,7 +16,9 @@ WORKDIR /var/task
 COPY requirements-space.txt .
 RUN pip install --no-cache-dir -r requirements-space.txt mangum==0.19.0 awslambdaric==3.1.1
 
-COPY yoga_pose_engine.py lambda_handler.py ./
+# lambda_warm_event.json is the EventBridge warm ping's payload; it ships in
+# the image only so the deploy smoke test can run it through the handler.
+COPY yoga_pose_engine.py lambda_handler.py lambda_warm_event.json ./
 COPY utils/ ./utils/
 COPY models/ ./models/
 
