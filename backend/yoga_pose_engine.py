@@ -55,10 +55,17 @@ from utils.preprocessing import (
 
 # `basicConfig` is a no-op when a handler is already installed (e.g. by
 # uvicorn's logging config), so this only supplies a sane default.
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    level=_LOG_LEVEL,
     format="%(asctime)s %(levelname)-8s %(name)s | %(message)s",
 )
+# On Lambda, awslambdaric installs a root handler first, so the basicConfig
+# above does nothing and the root stays at WARNING: every INFO line (request
+# latency, model loads) was dropped from CloudWatch. Set our own loggers'
+# level explicitly; they still propagate to whichever handler is installed.
+for _name in ("yoga_pose_engine", "utils"):
+    logging.getLogger(_name).setLevel(_LOG_LEVEL)
 logger = logging.getLogger("yoga_pose_engine")
 
 # ── Decision thresholds ───────────────────────────────────────────────────
