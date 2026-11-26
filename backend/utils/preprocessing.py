@@ -26,6 +26,7 @@ __all__ = [
     "MAX_DECODE_SIDE",
     "decode_image",
     "mirror_features",
+    "transplant_arms",
     "pad_to_square",
     "preprocess_for_movenet",
     "extract_keypoints_pixels",
@@ -212,6 +213,32 @@ def mirror_features(features: np.ndarray) -> np.ndarray:
     mirrored = batch[:, _MIRROR_ORDER, :].copy()
     mirrored[:, :, 0] *= -1.0
     return mirrored.reshape(np.shape(features))
+
+
+# (shoulder, elbow, wrist) per side, for arm transplant augmentation.
+ARM_CHAINS = ((LEFT_SHOULDER, 7, 9), (RIGHT_SHOULDER, 8, 10))
+
+
+def transplant_arms(
+    features: np.ndarray, donors: np.ndarray, rng: np.random.Generator
+) -> np.ndarray:
+    """Give each pose in ``features`` the arms of a random pose from ``donors``.
+
+    Both are ``(n, 34)`` batches from ``normalize_keypoints``. Each sample
+    keeps its own body and legs; its elbows and wrists are moved to where a
+    random donor's are, relative to the same shoulder. Use it for poses whose
+    arm position is free (tree pose is the legs; the arms may be overhead, in
+    prayer, out to the sides or on the hips), so the classifier learns to
+    read the legs instead of whatever arm position the training photos
+    happen to show.
+    """
+    out = np.asarray(features, dtype=np.float32).reshape(-1, NUM_KEYPOINTS, 2).copy()
+    pool = np.asarray(donors, dtype=np.float32).reshape(-1, NUM_KEYPOINTS, 2)
+    picked = pool[rng.integers(0, len(pool), size=len(out))]
+    for shoulder, elbow, wrist in ARM_CHAINS:
+        for joint in (elbow, wrist):
+            out[:, joint] = out[:, shoulder] + (picked[:, joint] - picked[:, shoulder])
+    return out.reshape(-1, FEATURE_DIM)
 
 
 def has_body(keypoints: np.ndarray) -> bool:

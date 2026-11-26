@@ -42,8 +42,9 @@ by construction rather than by convention.
 ## Training
 
 ```bash
-python train_movenet_classifier.py --augment-mirror   # extract (cached), split, train
-python train_movenet_classifier.py --cv 5 --augment-mirror   # per-class CV report
+# extract (cached), split, train -- the shipped recipe
+python train_movenet_classifier.py --augment-mirror --augment-arms 2 --restarts 8
+python train_movenet_classifier.py --cv 5 --augment-mirror --augment-arms 2   # per-class CV report
 python eval_pose_metrics.py                           # leak-free test set
 python fetch_wikimedia_testset.py                     # independent test photos (once)
 python eval_pose_metrics.py --test-root dataset_wikimedia
@@ -61,6 +62,27 @@ validation stays unaugmented. It was the best option on the grouped
 validation split over seeds 42/7/2024 (macro F1 0.669 vs 0.656 without).
 Joint-angle input features were also tried: they helped only while the data
 still had the label conflicts below, and were dropped once it was cleaned.
+
+`--augment-arms 2` fixes tree pose with the arms out to the sides being read
+as warrior (a Wikimedia test photo scored warrior 0.95). Tree pose is the
+legs; the arms may be overhead, in prayer, out to the sides or on the hips.
+But only 1 of 461 tree training samples had the arms out, against 163 of 731
+warrior samples, so the classifier had learned "arms out = warrior". The flag
+adds two copies of each tree training sample with the elbows and wrists of a
+random upright-pose sample (`ARM_DONOR_POSES`; `transplant_arms` in
+`utils/preprocessing.py`). Over 5-fold CV × seeds 42/7/2024:
+
+| | held-out trees given warrior T-arms, served | macro F1 | tree served | tree→warrior / warrior→tree |
+|---|---|---|---|---|
+| mirror only | 0.29 | 0.777 | 0.819 | 37 / 23 |
+| **+ `--augment-arms 2`** | **0.84** | **0.776** | **0.902** | **6 / 46** |
+| + same for warrior too | 0.82 | 0.751 | 0.855 | 81 / 19 |
+
+Single training runs with the flag vary more: across six runs on the same
+split, held-out trees misread as warrior ranged 0–21, and the lowest
+validation loss picked the good runs. `--restarts 8` trains eight times and
+keeps the lowest validation loss (selection uses the validation split only,
+never a test set).
 
 ### Data cleaning
 
@@ -109,7 +131,14 @@ Three measurements, because no single one is enough:
 |---|---|---|---|---|---|---|
 | original (cropped features, uncleaned data) | — | — | 0.829 | 0.746 | — | — |
 | cleaned + mirror, 24 classes, MoveNet Lightning | 0.777 | 0.710 | 0.842 | 0.778 | 0.793 | 0.611 |
-| **shipped:** same, **MoveNet Thunder** | **0.822** | **0.782** | **0.889** | **0.828** | **0.800** | **0.652** |
+| same, MoveNet Thunder | 0.822 | 0.782 | 0.889 | 0.828 | 0.800 | 0.652 |
+| **shipped:** same + `--augment-arms 2 --restarts 8` | **0.815¹** | **0.776¹** | **0.877** | **0.808** | **0.805** | **0.678** |
+
+¹ Mean of seeds 42/7/2024; the row above scores 0.820 / 0.777 under the same
+three seeds, so CV is unchanged. The leak-free test drop comes from classes the
+change doesn't touch (cobra, low lunge, seated forward bend), i.e.
+run-to-run variance; tree goes 0.978 → 0.985 F1 there and 1/2 → 2/2 on
+Wikimedia.
 
 Per class, for the poses that were weakest at the start (F1):
 

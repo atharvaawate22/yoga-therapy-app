@@ -190,3 +190,26 @@ def test_mirror_twice_is_identity_and_keeps_batch_shape() -> None:
 
     assert once.shape == (5, 34)
     np.testing.assert_allclose(mirror_features(once), batch)
+
+
+def test_transplant_arms_moves_only_elbows_and_wrists() -> None:
+    from utils.preprocessing import transplant_arms
+
+    rng = np.random.default_rng(3)
+    body = rng.normal(size=(4, 34)).astype(np.float32)
+    donor = rng.normal(size=(1, 34)).astype(np.float32)
+
+    out = transplant_arms(body, donor, rng).reshape(4, 17, 2)
+    b, d = body.reshape(4, 17, 2), donor.reshape(17, 2)
+
+    arms = [7, 8, 9, 10]
+    rest = [i for i in range(17) if i not in arms]
+    np.testing.assert_allclose(out[:, rest], b[:, rest])
+    # Each arm joint sits where the donor's does, relative to the same shoulder.
+    for shoulder, joints in ((5, (7, 9)), (6, (8, 10))):
+        for joint in joints:
+            np.testing.assert_allclose(
+                out[:, joint] - out[:, shoulder], np.broadcast_to(d[joint] - d[shoulder], (4, 2)),
+                rtol=1e-5, atol=1e-6,
+            )
+    np.testing.assert_allclose(body.reshape(4, 17, 2), b)  # input untouched

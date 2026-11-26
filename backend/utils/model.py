@@ -115,6 +115,11 @@ def train_classifier(
             tf.keras.utils.to_categorical(val_y, num_classes=num_classes),
         )
 
+    # Reset Keras' layer-name counters so every model's layers are "dense",
+    # "dense_1", ... even when several are trained in one process
+    # (--restarts, --cv). NumpyClassifier.from_keras_file reads the weights by
+    # those names, and a second model's "dense_6" broke the .npz export.
+    tf.keras.backend.clear_session()
     model = build_classifier(num_classes, dropout=dropout, l2=l2)
     model.compile(
         optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]

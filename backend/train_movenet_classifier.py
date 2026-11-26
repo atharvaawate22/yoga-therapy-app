@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -40,13 +40,23 @@ from utils.model import (
 )
 from utils.movenet import MoveNetRuntime
 from utils.paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MODELS_DIR, MOVENET_VARIANT
-from utils.preprocessing import mirror_features
+from utils.preprocessing import mirror_features, transplant_arms
 from utils.splits import grouped_stratified_kfold, grouped_stratified_split
 
 logger = logging.getLogger("train")
 
 MIN_SAMPLES = 20
 MIN_CLASSES = 2
+
+# Poses defined by the legs alone, whose arms may be anywhere. Their training
+# photos mostly show one arm position (tree: overhead or in prayer; 1 of 461
+# has the arms out to the sides), so a tree pose with arms out read as
+# warrior. --augment-arms gives them arms from these upright poses' samples.
+ARM_FREE_POSES = ("tree_pose",)
+ARM_DONOR_POSES = (
+    "tadasana", "pranamasana", "hasta_uttanasana", "warrior_pose",
+    "chair_pose", "tree_pose",
+)
 # Features depend on the keypoint model, so each variant has its own cache.
 FEATURE_CACHE = MODELS_DIR / f"feature_cache_{MOVENET_VARIANT}.npz"
 
@@ -76,6 +86,25 @@ def parse_args() -> argparse.Namespace:
         help="Add a left-right mirrored copy of every training sample (the same "
              "pose done to the other side). Applied after the split, so "
              "validation stays unaugmented.",
+    )
+    parser.add_argument(
+        "--augment-arms",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Add N copies of every ARM_FREE_POSES training sample with arms "
+             "taken from random ARM_DONOR_POSES training samples. Applied "
+             "after the split, before mirroring.",
+    )
+    parser.add_argument(
+        "--restarts",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Train N times from fresh weights and keep the run with the "
+             "lowest validation loss. Runs vary (with --augment-arms 2, the "
+             "held-out trees misread as warrior ranged 0-21 across six runs) "
+             "and the lowest val loss picked the good ones.",
     )
     parser.add_argument(
         "--cv",
@@ -195,6 +224,30 @@ def print_curve(history, every: int = 5) -> None:
 SERVING_MIN_CLASS_PROB = 0.70
 
 
+def augment_training(
+    x: np.ndarray, y: np.ndarray, labels: List[str], args: argparse.Namespace
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Training-only augmentation: arm transplants, then left-right mirroring."""
+    if args.augment_arms:
+        rng = np.random.default_rng(args.seed)
+        donor_ids = [labels.index(name) for name in ARM_DONOR_POSES if name in labels]
+        donors = x[np.isin(y, donor_ids)]
+        parts_x, parts_y = [x], [y]
+        for name in ARM_FREE_POSES:
+            if name not in labels:
+                continue
+            idx = labels.index(name)
+            own = x[y == idx]
+            for _ in range(args.augment_arms):
+                parts_x.append(transplant_arms(own, donors, rng))
+                parts_y.append(np.full(len(own), idx, dtype=y.dtype))
+        x, y = np.concatenate(parts_x), np.concatenate(parts_y)
+    if args.augment_mirror:
+        x = np.concatenate([x, mirror_features(x)])
+        y = np.concatenate([y, y])
+    return x, y
+
+
 def cross_validate(features: FeatureSet, args: argparse.Namespace) -> np.ndarray:
     """Out-of-fold predictions for every sample, scored per class.
 
@@ -218,10 +271,9 @@ def cross_validate(features: FeatureSet, args: argparse.Namespace) -> np.ndarray
             val_fraction=args.validation_split, seed=args.seed,
         )
         tr, va = train_idx[inner_train], train_idx[inner_val]
-        train_x, train_y = features.x[tr], features.y[tr]
-        if args.augment_mirror:
-            train_x = np.concatenate([train_x, mirror_features(train_x)])
-            train_y = np.concatenate([train_y, train_y])
+        train_x, train_y = augment_training(
+            features.x[tr], features.y[tr], features.labels, args
+        )
         model, _ = train_classifier(
             train_x, train_y, num_classes=num_classes,
             validation_data=(features.x[va], features.y[va]),
@@ -238,7 +290,8 @@ def cross_validate(features: FeatureSet, args: argparse.Namespace) -> np.ndarray
 
     width = max(len(label) for label in features.labels)
     print(f"\n{args.cv}-fold grouped cross-validation "
-          f"({'with' if args.augment_mirror else 'without'} mirror augmentation)")
+          f"(mirror {'on' if args.augment_mirror else 'off'}, "
+          f"arm transplant x{args.augment_arms})")
     print(f"accuracy {metrics['accuracy']:.3f}, macro F1 {metrics['macro_f1']:.3f}, "
           f"served {served.mean():.3f}\n")
     print(f"{'class'.ljust(width)}  {'prec':>6} {'rec':>6} {'f1':>6} {'served':>7} {'n':>5}")
@@ -309,25 +362,34 @@ def main() -> int:
         if report.single_group_classes:
             print(f"\nsingle-group classes (kept in train): {report.single_group_classes}")
 
-        train_x, train_y = features.x[train_idx], features.y[train_idx]
-        if args.augment_mirror:
-            train_x = np.concatenate([train_x, mirror_features(train_x)])
-            train_y = np.concatenate([train_y, train_y])
-            print(f"\nMirror augmentation: {len(train_idx)} -> {len(train_y)} training samples")
-
-        model, history = train_classifier(
-            train_x,
-            train_y,
-            num_classes=num_classes,
-            validation_data=(features.x[val_idx], features.y[val_idx]),
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            dropout=args.dropout,
-            l2=args.l2,
-            patience=args.patience or None,
-            class_weight=class_weight,
-            verbose=0,
+        train_x, train_y = augment_training(
+            features.x[train_idx], features.y[train_idx], features.labels, args
         )
+        if len(train_y) != len(train_idx):
+            print(f"\nAugmentation: {len(train_idx)} -> {len(train_y)} training samples")
+
+        best_loss = float("inf")
+        for run in range(max(1, args.restarts)):
+            run_model, run_history = train_classifier(
+                train_x,
+                train_y,
+                num_classes=num_classes,
+                validation_data=(features.x[val_idx], features.y[val_idx]),
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                dropout=args.dropout,
+                l2=args.l2,
+                patience=args.patience or None,
+                class_weight=class_weight,
+                verbose=0,
+            )
+            run_loss = min(run_history.history["val_loss"])
+            if args.restarts > 1:
+                print(f"run {run + 1}/{args.restarts}: best val_loss {run_loss:.4f}", flush=True)
+            if run_loss < best_loss:
+                best_loss, model, history = run_loss, run_model, run_history
+        if args.restarts > 1:
+            print(f"keeping the run with val_loss {best_loss:.4f}")
 
     print_curve(history)
 
