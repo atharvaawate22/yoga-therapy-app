@@ -269,8 +269,12 @@ uvicorn yoga_pose_engine:app --host 0.0.0.0 --port 8000
 
 `requirements.txt` includes full TensorFlow for training and evaluation. The
 server itself doesn't need it: MoveNet runs on LiteRT and the classifier runs
-in NumPy from the same `.keras` file (`utils.model.NumpyClassifier`), so the
-hosted images install the much smaller `requirements-space.txt`.
+in NumPy (`utils.model.NumpyClassifier`), so the hosted images install the
+much smaller `requirements-space.txt`. It loads `models/pose_classifier.npz`,
+a plain-NumPy copy of the `.keras` weights, because reading the `.keras` file
+needs h5py, which cost ~2.8 s of a Lambda cold start. Training writes the
+`.npz` automatically. If you replace the `.keras` file some other way, run
+`python export_classifier_npz.py`; a test fails until the two match.
 
 ## Deployment
 

@@ -14,6 +14,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 MODELS_DIR = BASE_DIR / "models"
 CLASSIFIER_MODEL_PATH = MODELS_DIR / "pose_classifier.keras"
+# The same weights as plain numpy arrays, for serving. Loading the .keras file
+# needs h5py, whose native library took ~2.8 s to read on a Lambda cold start.
+# Written by save_classifier / export_classifier_npz.py, never edited by hand.
+CLASSIFIER_NPZ_PATH = MODELS_DIR / "pose_classifier.npz"
 LABELS_PATH = MODELS_DIR / "pose_labels.json"
 
 # Keypoint model. The classifier is trained on one variant's keypoints, so

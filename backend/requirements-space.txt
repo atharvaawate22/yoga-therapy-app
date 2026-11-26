@@ -2,8 +2,9 @@
 # Serving needs no TensorFlow:
 #   - ai-edge-litert: the standalone TFLite runtime for MoveNet (a few MB,
 #     vs ~600 MB for tensorflow-cpu, which dominated cold starts)
-#   - h5py: the MLP head is run in numpy straight from the .keras file
-#     (utils.model.NumpyClassifier)
+#   - h5py: only a fallback now. The MLP head is run in numpy from
+#     models/pose_classifier.npz (utils.model.NumpyClassifier.from_npz);
+#     h5py is imported only if that file is missing and the .keras is read.
 #   - opencv-python-headless: no GUI/system-GL libs needed (this is a server)
 # Training and evaluation still use requirements.txt (full TensorFlow).
 # Keep shared versions in sync with requirements.txt.

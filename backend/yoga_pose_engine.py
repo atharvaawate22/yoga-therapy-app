@@ -38,7 +38,12 @@ from utils.model import (
     train_classifier,
 )
 from utils.movenet import MoveNetRuntime
-from utils.paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MOVENET_MODEL_PATH
+from utils.paths import (
+    CLASSIFIER_MODEL_PATH,
+    CLASSIFIER_NPZ_PATH,
+    LABELS_PATH,
+    MOVENET_MODEL_PATH,
+)
 from utils.preprocessing import (
     CORE_KEYPOINTS,
     KEYPOINT_NAMES,
@@ -169,7 +174,15 @@ class ClassifierRuntime:
             return cls()
         labels = load_labels()
         # numpy inference first: no TensorFlow import, so a cold start doesn't
-        # pay for it. Keras is only the fallback (e.g. an unsupported layer).
+        # pay for it. The .npz needs no h5py either (~2.8 s of a Lambda cold
+        # start); the .keras file and then Keras are only fallbacks.
+        if CLASSIFIER_NPZ_PATH.exists():
+            try:
+                model = NumpyClassifier.from_npz(CLASSIFIER_NPZ_PATH)
+                logger.info("Classifier loaded from npz (%d classes)", len(labels))
+                return cls(model, labels)
+            except Exception:
+                logger.exception("npz classifier load failed; trying the .keras file")
         try:
             model = NumpyClassifier.from_keras_file(CLASSIFIER_MODEL_PATH)
             logger.info("Classifier loaded with numpy (%d classes)", len(labels))

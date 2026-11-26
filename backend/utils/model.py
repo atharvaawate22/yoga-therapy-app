@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .paths import CLASSIFIER_MODEL_PATH, LABELS_PATH, MODELS_DIR
+from .paths import CLASSIFIER_MODEL_PATH, CLASSIFIER_NPZ_PATH, LABELS_PATH, MODELS_DIR
 from .preprocessing import FEATURE_DIM
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ __all__ = [
     "save_classifier",
     "load_classifier",
     "NumpyClassifier",
+    "export_classifier_npz",
+    "file_sha256",
     "load_labels",
 ]
 
@@ -175,6 +177,27 @@ def save_classifier(
     model.save(model_path)
     labels_path.write_text(json.dumps(list(labels), indent=2), encoding="utf-8")
     logger.info("Saved classifier -> %s (%d classes)", model_path, len(labels))
+    if model_path == CLASSIFIER_MODEL_PATH:
+        # Keep the serving copy in step with the model it was derived from.
+        export_classifier_npz(model_path, CLASSIFIER_NPZ_PATH)
+
+
+def file_sha256(path: Path) -> str:
+    import hashlib  # noqa: PLC0415
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def export_classifier_npz(
+    keras_path: Path = CLASSIFIER_MODEL_PATH, npz_path: Path = CLASSIFIER_NPZ_PATH
+) -> None:
+    """Write the .keras weights as a numpy-only .npz for serving.
+
+    The .npz records the SHA-256 of the .keras file it came from, so a test
+    can fail when the two drift apart (e.g. after retraining without export).
+    """
+    NumpyClassifier.from_keras_file(keras_path).save_npz(npz_path, file_sha256(keras_path))
+    logger.info("Exported serving classifier -> %s", npz_path)
 
 
 def load_classifier(model_path: Path = CLASSIFIER_MODEL_PATH) -> Any:
@@ -189,7 +212,10 @@ def load_classifier(model_path: Path = CLASSIFIER_MODEL_PATH) -> Any:
 
 
 class NumpyClassifier:
-    """Inference-only copy of the MLP head that needs just numpy and h5py.
+    """Inference-only copy of the MLP head that needs just numpy.
+
+    Serving loads it from ``pose_classifier.npz`` (``from_npz``, numpy only);
+    reading the ``.keras`` file (``from_keras_file``) also needs h5py.
 
     The server used to import all of TensorFlow (~600 MB) to run a ~4k
     parameter Dense stack, which dominated Lambda cold starts past API
@@ -243,6 +269,43 @@ class NumpyClassifier:
         if not layers:
             raise ValueError(f"No Dense layers found in {model_path}")
         return cls(layers)
+
+    def save_npz(self, npz_path: Path, source_sha256: str) -> None:
+        arrays: Dict[str, np.ndarray] = {
+            "activations": np.array([activation for _, _, activation in self.layers]),
+            "source_sha256": np.array(source_sha256),
+        }
+        for i, (kernel, bias, _) in enumerate(self.layers):
+            arrays[f"kernel_{i}"] = kernel
+            arrays[f"bias_{i}"] = bias
+        npz_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(npz_path, "wb") as handle:  # a handle, so numpy adds no suffix
+            np.savez(handle, **arrays)
+
+    @classmethod
+    def from_npz(cls, npz_path: Path = CLASSIFIER_NPZ_PATH) -> "NumpyClassifier":
+        """Load weights written by ``save_npz``: numpy only, no h5py."""
+        with np.load(npz_path, allow_pickle=False) as data:
+            activations = [str(a) for a in data["activations"]]
+            layers = []
+            for i, activation in enumerate(activations):
+                if activation not in cls._ACTIVATIONS:
+                    raise ValueError(f"Unsupported activation: {activation}")
+                layers.append(
+                    (
+                        np.asarray(data[f"kernel_{i}"], dtype=np.float32),
+                        np.asarray(data[f"bias_{i}"], dtype=np.float32),
+                        activation,
+                    )
+                )
+        if not layers:
+            raise ValueError(f"No layers found in {npz_path}")
+        return cls(layers)
+
+    @staticmethod
+    def npz_source_sha256(npz_path: Path = CLASSIFIER_NPZ_PATH) -> str:
+        with np.load(npz_path, allow_pickle=False) as data:
+            return str(data["source_sha256"])
 
     @property
     def input_dim(self) -> int:

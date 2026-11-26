@@ -34,6 +34,10 @@ assert isinstance(classifier.model, engine.NumpyClassifier), (
     f"classifier should be the numpy runtime, got {type(classifier.model)}"
 )
 assert classifier.ready(), "classifier did not load"
+assert "h5py" not in sys.modules, (
+    "h5py was imported: the classifier fell back to the .keras file instead of "
+    "pose_classifier.npz (missing or stale? run export_classifier_npz.py)"
+)
 assert importlib.util.find_spec("tensorflow") is None, (
     "tensorflow is installed in the serving image; it should not be needed"
 )
