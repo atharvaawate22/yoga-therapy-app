@@ -70,7 +70,12 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
-          docker build -f backend/Dockerfile.lambda -t "$IMAGE_URI" backend
+          # Lambda accepts only a single-platform image manifest. Newer
+          # Docker adds provenance/SBOM attestations by default, which pushes
+          # a multi-manifest index that Lambda rejects ("image manifest ...
+          # media type ... is not supported", Nov 2026). Build without them.
+          docker build --provenance=false --sbom=false --platform linux/amd64 \
+            -f backend/Dockerfile.lambda -t "$IMAGE_URI" backend
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
       # Loads the real models inside the image and runs one analysis. Unit
