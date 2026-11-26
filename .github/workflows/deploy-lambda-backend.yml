@@ -20,7 +20,9 @@ env:
   THROTTLE_RATE_LIMIT: "10"
   THROTTLE_BURST_LIMIT: "20"
   LAMBDA_TIMEOUT: "30"
-  LAMBDA_MEMORY_MB: "2048"
+  # Peak use is ~240 MB, but Lambda scales CPU with memory, so this also
+  # sets inference speed.
+  LAMBDA_MEMORY_MB: "1024"
 
 jobs:
   deploy:
