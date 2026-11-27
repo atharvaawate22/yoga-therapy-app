@@ -85,8 +85,8 @@ def test_only_excluded_dirs_yields_empty_featureset(tmp_path: Path) -> None:
 
 
 def test_synthetic_frame_filed_under_the_wrong_pose_is_skipped(tmp_path: Path) -> None:
-    """`guy2_cobra065.jpg` in the upward-dog folder is a cobra frame, not upward dog."""
-    write_class_dir(tmp_path, "Urdhva Mukha Svsnssana", ["guy2_cobra065.jpg", "real_photo.jpg"])
+    """`guy2_cobra065.jpg` filed under tree is a cobra frame, not tree pose."""
+    write_class_dir(tmp_path, "Vrksasana", ["guy2_cobra065.jpg", "real_photo.jpg"])
     # Same pose under its Sanskrit and English names is not a conflict.
     write_class_dir(tmp_path, "Utkatasana", ["guy1_chair010.jpg"])
 
@@ -135,3 +135,16 @@ def test_images_present_in_the_training_set_are_excluded(tmp_path: Path) -> None
 
     assert features.stats.kept == 1
     assert features.stats.skipped_in_train == 1
+
+
+def test_mixed_folder_trains_its_other_files_as_the_other_pose(tmp_path: Path) -> None:
+    """Only the `UMS_*` files in the upward-dog folder are upward dog; the rest are a cobra scrape."""
+    write_class_dir(
+        tmp_path, "Urdhva Mukha Svsnssana", ["augmented_0_UMS_12.jpg", "UMS_7.jpg", "Baby-Cobra.jpg"]
+    )
+
+    features = build_feature_dataset(StubMoveNet(), roots=[tmp_path])
+
+    assert features.labels == ["cobra_pose", "upward_dog"]
+    assert sorted(features.y.tolist()) == [0, 1, 1]
+    assert features.stats.per_class_kept == {"upward_dog": 2, "cobra_pose": 1}

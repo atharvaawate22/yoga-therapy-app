@@ -136,6 +136,31 @@ def filename_label_conflict(image_path: Path, folder_label: str) -> Optional[str
     return None
 
 
+# Folders that hold a second pose's images, told apart by filename:
+# folder name -> (filename marker of the folder's own pose, label for the rest).
+#
+# `Urdhva Mukha Svsnssana/` (upward dog) is two datasets in one. Its 105
+# `*UMS_*` files are the upward-dog set (Urdhva Mukha Svanasana, plus
+# augmented copies). The other 274 are a web scrape of "cobra pose" results
+# -- `Baby-Cobra.jpg`, `bhujangasana_yoga.png`, `images (12).jpg`, ... --
+# whose images all show cobra (reviewed by eye on contact sheets: pelvis on
+# the floor, mostly bent elbows, many with "Cobra"/"Bhujangasana" printed on
+# them). Trained as upward dog they taught the classifier that cobra is
+# upward dog: CV F1 0.39, and 4 of 6 Wikimedia upward-dog photos read cobra.
+MIXED_FOLDERS: Dict[str, Tuple[str, str]] = {
+    "urdhva mukha svsnssana": ("UMS", "cobra_pose"),
+}
+
+
+def image_label(image_path: Path, folder_label: str) -> str:
+    """The label an image trains as: its folder's, unless MIXED_FOLDERS says otherwise."""
+    rule = MIXED_FOLDERS.get(image_path.parent.name.lower())
+    if rule is None:
+        return folder_label
+    marker, other_label = rule
+    return folder_label if marker in image_path.stem else other_label
+
+
 def image_hashes(roots: Optional[Sequence[Path]] = None) -> Set[str]:
     """MD5 of every image under the class folders of ``roots`` (default: training)."""
     return {
@@ -201,7 +226,11 @@ def build_feature_dataset(
         logger.warning("Every discovered class directory was excluded")
         return _empty()
 
-    labels = sorted({normalize_label(d.name) for d in class_dirs})
+    labels = sorted(
+        {normalize_label(d.name) for d in class_dirs}
+        | {rule[1] for d in class_dirs for name, rule in MIXED_FOLDERS.items()
+           if d.name.lower() == name}
+    )
     label_to_idx = {label: idx for idx, label in enumerate(labels)}
 
     x_data: List[np.ndarray] = []
@@ -212,14 +241,15 @@ def build_feature_dataset(
     seen: Dict[str, str] = {}
 
     for class_dir in class_dirs:
-        label = normalize_label(class_dir.name)
-        label_idx = label_to_idx[label]
+        folder_label = normalize_label(class_dir.name)
         image_paths = _iter_images(class_dir)
         if limit_per_class is not None:
             image_paths = image_paths[:limit_per_class]
 
         for image_path in image_paths:
             stats.total_images += 1
+            label = image_label(image_path, folder_label)
+            label_idx = label_to_idx[label]
             if filename_label_conflict(image_path, label):
                 stats.skipped_label_conflict += 1
                 continue

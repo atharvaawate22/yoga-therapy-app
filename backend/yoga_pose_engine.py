@@ -38,6 +38,7 @@ from utils.model import (
     train_classifier,
 )
 from utils.movenet import MoveNetRuntime
+from utils.pose_rules import apply_pose_rules
 from utils.paths import (
     CLASSIFIER_MODEL_PATH,
     CLASSIFIER_NPZ_PATH,
@@ -204,6 +205,7 @@ class ClassifierRuntime:
         if not self.ready():
             return {}
         probs = self.model.predict(np.expand_dims(normalized_flat, axis=0), verbose=0)[0]
+        probs = apply_pose_rules(normalized_flat, probs, self.labels)
         return {label: float(probs[idx]) for idx, label in enumerate(self.labels)}
 
 

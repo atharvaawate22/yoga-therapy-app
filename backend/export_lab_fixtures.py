@@ -31,6 +31,7 @@ from PIL import Image
 from utils.model import NumpyClassifier, load_labels
 from utils.movenet import MoveNetRuntime
 from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATH, MOVENET_VARIANTS
+from utils.pose_rules import apply_pose_rules
 from utils.preprocessing import (
     decode_image,
     extract_keypoints_pixels,
@@ -87,7 +88,7 @@ def analyse(data: bytes, movenet: MoveNetRuntime, classifier: NumpyClassifier, l
     # Normalized coordinates (side 1) are enough: features are scale-invariant.
     keypoints = extract_keypoints_pixels(raw, 1, 1)
     features = normalize_keypoints(keypoints)
-    probs = classifier.predict(features[None, :])[0]
+    probs = apply_pose_rules(features, classifier.predict(features[None, :])[0], labels)
     best = int(np.argmax(probs))
     return {
         "raw": f32(raw),

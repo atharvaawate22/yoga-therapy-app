@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 import yoga_pose_engine as engine
-from utils import preprocessing
+from utils import pose_rules, preprocessing
 from utils.model import NumpyClassifier, load_labels
 from utils.paths import BASE_DIR, CLASSIFIER_MODEL_PATH
 
@@ -64,6 +64,11 @@ def build_artifact() -> dict:
             "coreKeypoints": list(preprocessing.CORE_KEYPOINTS),
             "majorKeypoints": list(preprocessing.MAJOR_KEYPOINTS),
             "ruleMinKeypointScore": engine.RULE_MIN_KEYPOINT_SCORE,
+            "upwardDogMinElbowDeg": pose_rules.UPWARD_DOG_MIN_ELBOW_DEG,
+            "upwardDogMinHipLift": pose_rules.UPWARD_DOG_MIN_HIP_LIFT,
+            "upwardDogMinKneeLift": pose_rules.UPWARD_DOG_MIN_KNEE_LIFT,
+            "upwardDogMaxHipLift": pose_rules.UPWARD_DOG_MAX_HIP_LIFT,
+            "upwardDogMinKneeDeg": pose_rules.UPWARD_DOG_MIN_KNEE_DEG,
         },
         "layers": layers,
     }

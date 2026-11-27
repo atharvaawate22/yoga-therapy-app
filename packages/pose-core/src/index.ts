@@ -11,4 +11,6 @@ export type { Keypoint, KeypointName } from "./keypoints";
 export { hasBody, normalizeKeypoints } from "./features";
 export type { BodyGate } from "./features";
 export { PoseClassifier } from "./classifier";
+export { applyPoseRules, looksLikeUpwardDog, minKneeAngle, proneLift } from "./rules";
+export type { ProneLift, UpwardDogRule } from "./rules";
 export type { Activation, ClassifierArtifact, DenseLayer, Prediction } from "./classifier";

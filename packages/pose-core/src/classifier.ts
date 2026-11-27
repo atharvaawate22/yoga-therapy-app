@@ -4,6 +4,7 @@
  * softmax output. Weights come from backend/export_web_artifacts.py.
  */
 import type { BodyGate } from "./features";
+import { applyPoseRules, type UpwardDogRule } from "./rules";
 
 export type Activation = "linear" | "relu" | "softmax";
 
@@ -20,20 +21,21 @@ export interface ClassifierArtifact {
   sourceSha256: string;
   movenetVariant: string;
   labels: string[];
-  thresholds: BodyGate & {
-    minClassProb: number;
-    minClassProbLive: number;
-    stabilityWindow: number;
-    stabilityMinVotes: number;
-    ruleMinKeypointScore: number;
-  };
+  thresholds: BodyGate &
+    UpwardDogRule & {
+      minClassProb: number;
+      minClassProbLive: number;
+      stabilityWindow: number;
+      stabilityMinVotes: number;
+      ruleMinKeypointScore: number;
+    };
   layers: DenseLayer[];
 }
 
 export interface Prediction {
   label: string;
   probability: number;
-  /** Softmax output, index-aligned with the artifact's labels. */
+  /** Softmax output after the pose rules, index-aligned with the artifact's labels. */
   probabilities: Float32Array;
 }
 
@@ -92,6 +94,8 @@ export class PoseClassifier {
     }
     let activations = features;
     for (const { layer, kernel, bias } of this.weights) activations = dense(activations, layer, kernel, bias);
+    // Same geometry rules the server applies after its classifier.
+    activations = applyPoseRules(features, activations, this.artifact.labels, this.artifact.thresholds);
     let best = 0;
     for (let j = 1; j < activations.length; j++) if (activations[j]! > activations[best]!) best = j;
     return {

@@ -86,9 +86,16 @@ never a test set).
 
 ### Data cleaning
 
-`utils.dataset.build_feature_dataset` applies three rules and reports each in
-its summary line:
+`utils.dataset.build_feature_dataset` applies these rules (the last three are
+reported in its summary line):
 
+- **Mixed folders** (`MIXED_FOLDERS`). `Urdhva Mukha Svsnssana/` (upward dog)
+  held two datasets: 105 `*UMS_*` upward-dog images and 274 images from a web
+  scrape of "cobra pose" (`Baby-Cobra.jpg`, `bhujangasana_yoga.png`,
+  `images (12).jpg`, …), all of which show cobra (reviewed by eye on contact
+  sheets). Only the `UMS` files train as upward dog; the rest train as cobra.
+  Cobra's CV F1 went 0.667 → 0.845 (served 0.34 → 0.74). Upward dog is left
+  with 61 samples — see the upward-dog rule below.
 - **Label conflicts.** The synthetic 3D-render images are named
   `<actor><n>_<pose><frame>` (`guy2_cobra065.jpg`). 200 cobra frames were also
   filed under the upward-dog training folder as byte-identical copies of files
@@ -132,13 +139,21 @@ Three measurements, because no single one is enough:
 | original (cropped features, uncleaned data) | — | — | 0.829 | 0.746 | — | — |
 | cleaned + mirror, 24 classes, MoveNet Lightning | 0.777 | 0.710 | 0.842 | 0.778 | 0.793 | 0.611 |
 | same, MoveNet Thunder | 0.822 | 0.782 | 0.889 | 0.828 | 0.800 | 0.652 |
-| **shipped:** same + `--augment-arms 2 --restarts 8` | **0.815¹** | **0.776¹** | **0.877** | **0.808** | **0.805** | **0.678** |
+| same + `--augment-arms 2 --restarts 8` | 0.815¹ | 0.776¹ | 0.877 | 0.808 | 0.805 | 0.678 |
+| **shipped:** same, upward-dog folder cleaned + upward-dog rule | **0.835²** | **0.763²** | **0.875** | **0.800** | **0.805** | **0.687** |
 
 ¹ Mean of seeds 42/7/2024; the row above scores 0.820 / 0.777 under the same
 three seeds, so CV is unchanged. The leak-free test drop comes from classes the
 change doesn't touch (cobra, low lunge, seated forward bend), i.e.
 run-to-run variance; tree goes 0.978 → 0.985 F1 there and 1/2 → 2/2 on
 Wikimedia.
+
+² Seed 42, classifier only, on the relabelled data (so not directly
+comparable with the rows above: 274 samples changed class). Wikimedia, with
+the rule: cobra 8/12 → 12/12, upward dog 1/6 → 3/6, Ashwa Sanchalanasana
+2/6 → 3/6. Known regression: pranamasana → tree (Wikimedia 3/4 → 1/4 top-1;
+one photo is now served as tree at 0.96), a side effect of the tree arm
+transplants that varies run to run.
 
 Per class, for the poses that were weakest at the start (F1):
 
@@ -159,6 +174,29 @@ keypoints, and each variant has its own feature cache.
 Scores published here before the data cleanup were computed on the leaky test
 set and overstate generalization.
 
+### Upward dog: a geometry rule on top of the classifier
+
+After the cleanup the classifier has 61 upward-dog samples (augmented copies
+of ~14 photos) against 615 cobra and almost never answers upward dog (CV
+recall 0.10). Oversampling them 4× or 8× raised CV recall to 0.3–0.5 but
+found 0–1 of the 6 Wikimedia upward dogs, i.e. it learned those photos, not
+the pose. What does separate the poses on real photos is that upward dog
+lifts the hips and knees off the floor.
+
+`utils/pose_rules.py` (mirrored in `packages/pose-core/src/rules.ts`, applied
+by the server, the evaluator and the lab fixtures): when cobra is the top
+class and the body has near-straight arms (≥145°) and legs (both knees
+≥120°), hips 0.325–0.60 torso lengths above the wrist–ankle floor line and
+knees ≥0.04 above it, the cobra and upward-dog probabilities swap. All
+thresholds are set on training features; the knee-angle and maximum-hip
+limits keep it off the Surya lunge, which the first version flagged on
+Wikimedia. On training data it finds 21/61 upward dogs and flags 27/615
+cobras, 0/47 lunges, 0/192 low lunges. `eval_pose_metrics.py --no-rules`
+scores the classifier alone.
+
+**The real fix is more upward-dog images** (`docs/RECORDING_GUIDE.md`,
+`extract_video_frames.py`); with enough of them the rule can go.
+
 ### Per-class weak spots (cross-validation, Thunder)
 
 "served" is the share of a class the API reports correctly *above the
@@ -166,12 +204,15 @@ confidence cutoff* (0.70) — what a user experiences in image mode:
 
 | class | n | CV F1 | served |
 |---|---|---|---|
-| upward_dog | 217 | 0.480 | 0.078 |
+| upward_dog³ | 61 | 0.174 | 0.000 |
 | ashwa_sanchalanasana | 47 | 0.468 | 0.191 |
 | hasta_uttanasana | 52 | 0.639 | 0.154 |
-| cobra_pose | 459 | 0.654 | 0.386 |
+| cobra_pose³ | 615 | 0.845 | 0.743 |
 | butterfly_pose | 277 | 0.696 | 0.357 |
 | seated_twist | 170 | 0.729 | 0.400 |
+
+³ After the upward-dog folder cleanup (others predate it), classifier only:
+the upward-dog rule is what serves upward dog.
 
 **Confidence cutoffs.** Single images use `MIN_CLASS_PROB = 0.70`: on
 out-of-fold predictions 94.3% of reported poses are correct and 70.4% of

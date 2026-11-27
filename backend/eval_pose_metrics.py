@@ -24,6 +24,7 @@ from utils.dataset import build_feature_dataset, image_hashes
 from utils.model import load_classifier, load_labels
 from utils.movenet import MoveNetRuntime
 from utils.paths import BASE_DIR, TEST_DATASET_DIR
+from utils.pose_rules import apply_pose_rules
 
 logger = logging.getLogger("eval")
 
@@ -157,6 +158,11 @@ def main() -> int:
              "(e.g. dataset_test, written by extract_video_frames.py)",
     )
     parser.add_argument("--limit-per-class", type=int, default=None)
+    parser.add_argument(
+        "--no-rules",
+        action="store_true",
+        help="Score the classifier alone, without utils.pose_rules (the server applies them).",
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
     test_root = args.test_root if args.test_root.is_absolute() else BASE_DIR / args.test_root
@@ -194,6 +200,8 @@ def main() -> int:
         return 1
 
     probs = model.predict(x, verbose=0)
+    if not args.no_rules:
+        probs = apply_pose_rules(x, probs, trained_labels)
     y_pred = np.argmax(probs, axis=1).astype(np.int32)
 
     metrics = confusion_metrics(y_true, y_pred, len(trained_labels))
